@@ -1,0 +1,604 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>灵感垃圾桶</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    :root {
+      --cream: #f7f4ee;
+      --cream-deep: #ede8df;
+      --paper: #faf8f4;
+      --paper-shadow: #e8e2d8;
+      --brown-light: #c4b5a4;
+      --brown: #a89582;
+      --brown-deep: #8f7d6c;
+      --brown-ink: #7a6b5c;
+      --text-soft: #6f655c;
+      --text-muted: #9a9086;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", "PingFang SC", "Hiragino Sans GB", sans-serif;
+      background: var(--cream);
+      color: var(--text-soft);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    .app {
+      max-width: 420px;
+      margin: 0 auto;
+      padding: 2.5rem 1.25rem 3rem;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100vh;
+    }
+
+    /* —— 手绘废纸篓 —— */
+    .bin-stage {
+      position: relative;
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      margin-bottom: 1.25rem;
+    }
+
+    .bin-hero {
+      position: relative;
+      width: 120px;
+      height: 118px;
+      flex-shrink: 0;
+      z-index: 2;
+    }
+
+    .bin-icon {
+      width: 100%;
+      height: 100%;
+      display: block;
+      filter: drop-shadow(0 6px 14px rgba(122, 107, 92, 0.12));
+    }
+
+    .bin-hero .bin-glow {
+      position: absolute;
+      bottom: 8px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 72px;
+      height: 10px;
+      background: radial-gradient(ellipse, rgba(168, 149, 130, 0.22) 0%, transparent 72%);
+      pointer-events: none;
+    }
+
+  /* —— 揉皱白纸输入区 —— */
+    .input-zone {
+      width: 100%;
+      margin-top: 0.5rem;
+      margin-bottom: 1rem;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.85rem;
+    }
+
+    .paper-input-wrap {
+      position: relative;
+      width: 100%;
+    }
+
+    .paper-input-wrap::before {
+      content: "";
+      position: absolute;
+      inset: -3px 4px 6px -4px;
+      background: var(--paper-shadow);
+      border-radius: 14px 18px 16px 12px;
+      transform: rotate(-1.2deg);
+      opacity: 0.55;
+      z-index: 0;
+    }
+
+    #entry {
+      position: relative;
+      z-index: 1;
+      width: 100%;
+      min-height: 88px;
+      padding: 1rem 1.1rem;
+      font-size: 0.95rem;
+      line-height: 1.55;
+      font-family: inherit;
+      color: var(--brown-ink);
+      resize: none;
+      border: none;
+      border-radius: 12px 16px 14px 11px;
+      transform: rotate(0.35deg);
+      background:
+        radial-gradient(ellipse 80% 50% at 18% 12%, rgba(255, 255, 255, 0.9) 0%, transparent 55%),
+        radial-gradient(ellipse 60% 40% at 88% 78%, rgba(200, 190, 175, 0.15) 0%, transparent 50%),
+        radial-gradient(ellipse 40% 30% at 72% 22%, rgba(180, 170, 155, 0.08) 0%, transparent 45%),
+        linear-gradient(168deg, #fdfbf8 0%, #f3efe8 42%, #ebe5dc 100%);
+      box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.85),
+        inset 2px 3px 8px rgba(180, 168, 150, 0.12),
+        inset -1px -2px 6px rgba(160, 148, 132, 0.08),
+        0 2px 8px rgba(122, 107, 92, 0.08);
+      outline: none;
+    }
+
+    #entry::placeholder {
+      color: var(--text-muted);
+      opacity: 0.85;
+    }
+
+    #entry:focus {
+      box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.9),
+        inset 2px 3px 10px rgba(180, 168, 150, 0.14),
+        0 0 0 2px rgba(196, 181, 164, 0.35),
+        0 3px 12px rgba(122, 107, 92, 0.1);
+    }
+
+    #save-btn {
+      font-family: inherit;
+      font-size: 0.82rem;
+      font-weight: 500;
+      letter-spacing: 0.18em;
+      padding: 0.5rem 1.6rem;
+      color: #faf7f2;
+      background: linear-gradient(180deg, var(--brown-light) 0%, var(--brown) 100%);
+      border: none;
+      border-radius: 999px;
+      cursor: pointer;
+      box-shadow: 0 2px 8px rgba(122, 107, 92, 0.18);
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    #save-btn:hover {
+      background: linear-gradient(180deg, #cbbbae 0%, var(--brown-deep) 100%);
+    }
+
+    #save-btn:active {
+      transform: scale(0.98);
+    }
+
+    #save-btn:disabled {
+      opacity: 0.55;
+      cursor: wait;
+    }
+
+    /* —— 纸团堆叠区（桶口下方） —— */
+    .bin-scene {
+      position: relative;
+      width: 100%;
+      min-height: 200px;
+      margin-top: -36px;
+      z-index: 1;
+    }
+
+    .pile-stats {
+      text-align: center;
+      font-size: 0.72rem;
+      color: var(--text-muted);
+      letter-spacing: 0.04em;
+      margin-bottom: 0.35rem;
+      pointer-events: none;
+    }
+
+    .pile-stats strong {
+      color: var(--brown);
+      font-weight: 500;
+    }
+
+    .pile-area {
+      position: relative;
+      left: auto;
+      margin: 0 auto;
+      width: 280px;
+      height: 188px;
+      pointer-events: none;
+    }
+
+    .pile-area .ball {
+      pointer-events: auto;
+    }
+
+    /* 纸团 */
+    .ball {
+      position: absolute;
+      width: 52px;
+      height: 48px;
+      padding: 0;
+      border: none;
+      cursor: pointer;
+      background: transparent;
+      transform-origin: center bottom;
+      transition: transform 0.25s ease, filter 0.25s ease;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    .ball:focus-visible {
+      outline: 2px solid var(--brown-light);
+      outline-offset: 3px;
+      border-radius: 50%;
+    }
+
+    .ball:hover {
+      transform: translate(var(--tx, 0), var(--ty, 0)) rotate(var(--rot, 0deg)) scale(1.06) !important;
+      z-index: 50 !important;
+      filter: drop-shadow(0 4px 10px rgba(122, 107, 92, 0.2));
+    }
+
+    .ball-inner {
+      width: 100%;
+      height: 100%;
+      border-radius: 42% 38% 44% 40% / 44% 40% 42% 38%;
+      background:
+        radial-gradient(circle at 32% 28%, #fffefb 0%, transparent 42%),
+        radial-gradient(circle at 70% 65%, rgba(210, 200, 185, 0.35) 0%, transparent 48%),
+        linear-gradient(145deg, #f8f5f0 0%, #e8e2d8 55%, #ddd6cc 100%);
+      box-shadow:
+        inset -2px -3px 6px rgba(160, 148, 132, 0.2),
+        inset 1px 1px 3px rgba(255, 255, 255, 0.7),
+        0 2px 6px rgba(122, 107, 92, 0.14);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 4px;
+    }
+
+    .ball time {
+      font-size: 0.5rem;
+      color: var(--text-muted);
+      line-height: 1.2;
+      text-align: center;
+      pointer-events: none;
+      white-space: nowrap;
+    }
+
+    .ball .ball-hint {
+      font-size: 0.45rem;
+      color: var(--brown-light);
+      opacity: 0;
+      margin-top: 1px;
+      transition: opacity 0.2s;
+    }
+
+    .ball:hover .ball-hint {
+      opacity: 1;
+    }
+
+    /* 掉落动画 */
+    .ball.falling {
+      pointer-events: none;
+      z-index: 100 !important;
+      animation: drop-in 0.72s cubic-bezier(0.34, 1.15, 0.48, 1) forwards;
+    }
+
+    @keyframes drop-in {
+      0% {
+        opacity: 0.3;
+        transform: translate(0, -120px) rotate(-8deg) scale(0.5);
+      }
+      55% {
+        opacity: 1;
+        transform: translate(var(--tx, 0), calc(var(--ty, 0) - 18px)) rotate(calc(var(--rot, 0deg) + 6deg)) scale(1.05);
+      }
+      78% {
+        transform: translate(var(--tx, 0), calc(var(--ty, 0) + 6px)) rotate(calc(var(--rot, 0deg) - 3deg)) scale(0.96);
+      }
+      100% {
+        opacity: 1;
+        transform: translate(var(--tx, 0), var(--ty, 0)) rotate(var(--rot, 0deg)) scale(1);
+      }
+    }
+
+    /* 飞行中的大号纸团（从输入区飞出） */
+    .fly-ball {
+      position: fixed;
+      z-index: 200;
+      width: 40px;
+      height: 38px;
+      border-radius: 42% 38% 44% 40%;
+      background: linear-gradient(145deg, #faf8f4, #e5dfd6);
+      box-shadow: 0 4px 12px rgba(122, 107, 92, 0.2);
+      pointer-events: none;
+      opacity: 0;
+    }
+
+    .fly-ball.active {
+      animation: fly-to-bin 0.55s cubic-bezier(0.45, 0, 0.2, 1) forwards;
+    }
+
+    @keyframes fly-to-bin {
+      0% {
+        opacity: 1;
+        transform: translate(0, 0) scale(1) rotate(0deg);
+      }
+      100% {
+        opacity: 0.9;
+        transform: translate(var(--fly-x), var(--fly-y)) scale(0.65) rotate(180deg);
+      }
+    }
+
+    .empty-hint {
+      position: absolute;
+      left: 50%;
+      top: 42%;
+      transform: translate(-50%, -50%);
+      font-size: 0.78rem;
+      color: var(--text-muted);
+      opacity: 0.45;
+      text-align: center;
+      line-height: 1.6;
+      pointer-events: none;
+      transition: opacity 0.3s;
+    }
+
+    .empty-hint.hidden {
+      opacity: 0;
+    }
+
+    @media (max-width: 380px) {
+      .pile-area {
+        width: 100%;
+        max-width: 260px;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .ball.falling,
+      .fly-ball.active {
+        animation: none;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <div class="bin-stage">
+    <div class="bin-hero" aria-hidden="true">
+      <svg class="bin-icon" viewBox="0 0 120 130" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="废纸篓">
+        <!-- 手绘感：略抖的线条、浅棕描边 -->
+        <path d="M28 42 Q30 38 36 38 L84 38 Q90 38 92 42" stroke="#b5a594" stroke-width="2.2" stroke-linecap="round" fill="none"/>
+        <path d="M32 42 L30 98 Q29 108 38 108 L82 108 Q91 108 90 98 L88 42" stroke="#a89582" stroke-width="2" stroke-linejoin="round" fill="rgba(196,181,164,0.12)"/>
+        <path d="M38 52 L42 100 M52 50 L54 102 M62 50 L62 103 M72 50 L70 101 M82 52 L78 99" stroke="#c4b5a4" stroke-width="1" stroke-linecap="round" opacity="0.65"/>
+        <ellipse cx="60" cy="108" rx="28" ry="4" fill="rgba(168,149,130,0.15)"/>
+        <path d="M24 44 Q22 46 24 48 L28 50" stroke="#b5a594" stroke-width="1.5" stroke-linecap="round" fill="none" opacity="0.5"/>
+        <path d="M96 44 Q98 46 96 48 L92 50" stroke="#b5a594" stroke-width="1.5" stroke-linecap="round" fill="none" opacity="0.5"/>
+      </svg>
+      <div class="bin-glow"></div>
+    </div>
+
+    <section class="bin-scene" aria-label="纸团记录">
+      <p class="pile-stats" id="stats"></p>
+      <p class="empty-hint" id="empty-hint">还没有纸团<br />写点什么，点记录</p>
+      <div class="pile-area" id="pile"></div>
+    </section>
+    </div>
+
+    <div class="input-zone">
+      <div class="paper-input-wrap">
+        <textarea
+          id="entry"
+          rows="3"
+          placeholder="把你的抱怨和灵感丢进来..."
+          autocomplete="off"
+        ></textarea>
+      </div>
+      <button type="button" id="save-btn">记录</button>
+    </div>
+  </div>
+
+  <script>
+    const STORAGE_KEY = "inspiration-bin-entries";
+    const entry = document.getElementById("entry");
+    const saveBtn = document.getElementById("save-btn");
+    const pile = document.getElementById("pile");
+    const stats = document.getElementById("stats");
+    const emptyHint = document.getElementById("empty-hint");
+
+    /* 固定错落布局：新记录用下一个槽位，整体像堆在桶里 */
+    const SLOTS = [
+      { x: 108, y: 72, r: -14 },
+      { x: 72, y: 88, r: 8 },
+      { x: 148, y: 84, r: 22 },
+      { x: 42, y: 68, r: -6 },
+      { x: 178, y: 76, r: 12 },
+      { x: 92, y: 58, r: -18 },
+      { x: 132, y: 62, r: 5 },
+      { x: 58, y: 98, r: 16 },
+      { x: 162, y: 94, r: -10 },
+      { x: 24, y: 82, r: 20 },
+      { x: 198, y: 78, r: -8 },
+      { x: 118, y: 48, r: 6 },
+      { x: 78, y: 44, r: -12 },
+      { x: 155, y: 52, r: 15 },
+    ];
+
+    function load() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        return raw ? JSON.parse(raw) : [];
+      } catch {
+        return [];
+      }
+    }
+
+    function save(items) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
+    }
+
+    function formatTime(ts) {
+      const d = new Date(ts);
+      const m = String(d.getMonth() + 1).padStart(2, "0");
+      const day = String(d.getDate()).padStart(2, "0");
+      const h = String(d.getHours()).padStart(2, "0");
+      const min = String(d.getMinutes()).padStart(2, "0");
+      return `${m}/${day} ${h}:${min}`;
+    }
+
+    function slotForIndex(displayIndex) {
+      const s = SLOTS[displayIndex % SLOTS.length];
+      const layer = Math.floor(displayIndex / SLOTS.length);
+      const jitter = layer * 3;
+      return {
+        x: s.x + (displayIndex % 3) * 2 - jitter,
+        y: s.y - layer * 6 + (displayIndex % 2),
+        r: s.r + (displayIndex % 5) - 2,
+      };
+    }
+
+    function previewText(text) {
+      const t = text.replace(/\s+/g, " ").trim();
+      return t.length > 36 ? `${t.slice(0, 36)}…` : t;
+    }
+
+    function createBallEl(item, displayIndex, { animate } = {}) {
+      const { text, ts } = item;
+      const slot = slotForIndex(displayIndex);
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "ball" + (animate ? " falling" : "");
+      btn.style.setProperty("--tx", `${slot.x}px`);
+      btn.style.setProperty("--ty", `${slot.y}px`);
+      btn.style.setProperty("--rot", `${slot.r}deg`);
+      btn.style.left = "0";
+      btn.style.top = "0";
+      btn.style.transform = animate
+        ? undefined
+        : `translate(${slot.x}px, ${slot.y}px) rotate(${slot.r}deg)`;
+      btn.style.zIndex = String(10 + displayIndex);
+      btn.dataset.index = String(item._storageIndex);
+      btn.title = `${previewText(text)}\n${formatTime(ts)} · 点击删除`;
+      btn.setAttribute("aria-label", `${previewText(text)}，${formatTime(ts)}，点击删除`);
+
+      const inner = document.createElement("span");
+      inner.className = "ball-inner";
+      const timeEl = document.createElement("time");
+      timeEl.dateTime = new Date(ts).toISOString();
+      timeEl.textContent = formatTime(ts);
+      const hint = document.createElement("span");
+      hint.className = "ball-hint";
+      hint.textContent = "删掉";
+      inner.appendChild(timeEl);
+      inner.appendChild(hint);
+      btn.appendChild(inner);
+
+      btn.addEventListener("animationend", () => {
+        btn.classList.remove("falling");
+        btn.style.transform = `translate(${slot.x}px, ${slot.y}px) rotate(${slot.r}deg)`;
+      });
+
+      btn.addEventListener("click", () => {
+        const idx = Number(btn.dataset.index);
+        const next = load();
+        if (idx < 0 || idx >= next.length) return;
+        next.splice(idx, 1);
+        save(next);
+        render();
+      });
+
+      return btn;
+    }
+
+    function updateStats(n) {
+      if (n === 0) {
+        stats.textContent = "";
+      } else {
+        stats.innerHTML = `桶里 <strong>${n}</strong> 团`;
+      }
+      emptyHint.classList.toggle("hidden", n > 0);
+    }
+
+    function render({ animateLast } = {}) {
+      const items = load().map((item, i) => ({ ...item, _storageIndex: i }));
+      updateStats(items.length);
+      pile.innerHTML = "";
+
+      /* 倒序：最新的在视觉上更靠前（更大 displayIndex 用更靠上的槽） */
+      const reversed = [...items].reverse();
+      reversed.forEach((item, revIdx) => {
+        const displayIndex = revIdx;
+        const isNewest = animateLast && revIdx === 0;
+        pile.appendChild(createBallEl(item, displayIndex, { animate: isNewest }));
+      });
+    }
+
+    function flyPaper(fromRect, toRect, onDone) {
+      const fly = document.createElement("div");
+      fly.className = "fly-ball";
+      document.body.appendChild(fly);
+
+      const startX = fromRect.left + fromRect.width / 2 - 20;
+      const startY = fromRect.top + fromRect.height / 2 - 19;
+      const endX = toRect.left + toRect.width / 2 - 20;
+      const endY = toRect.top + 40;
+
+      fly.style.left = `${startX}px`;
+      fly.style.top = `${startY}px`;
+      fly.style.setProperty("--fly-x", `${endX - startX}px`);
+      fly.style.setProperty("--fly-y", `${endY - startY}px`);
+
+      requestAnimationFrame(() => {
+        fly.classList.add("active");
+      });
+
+      fly.addEventListener("animationend", () => {
+        fly.remove();
+        onDone();
+      }, { once: true });
+    }
+
+    function addRecord() {
+      const text = entry.value.trim();
+      if (!text) return;
+
+      saveBtn.disabled = true;
+      const items = load();
+      items.push({ text, ts: Date.now() });
+      save(items);
+
+      const inputRect = entry.getBoundingClientRect();
+      const pileRect = pile.getBoundingClientRect();
+
+      entry.value = "";
+      entry.blur();
+
+      const prefersReduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+      if (prefersReduced) {
+        render({ animateLast: true });
+        saveBtn.disabled = false;
+        entry.focus();
+        return;
+      }
+
+      flyPaper(inputRect, pileRect, () => {
+        render({ animateLast: true });
+        saveBtn.disabled = false;
+        entry.focus();
+      });
+    }
+
+    saveBtn.addEventListener("click", addRecord);
+
+    entry.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        addRecord();
+      }
+    });
+
+    entry.focus();
+    render();
+  </script>
+</body>
+</html>
