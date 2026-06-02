@@ -929,15 +929,17 @@ async function syncEmails() {
       saveState();
       renderEmailList();
       renderDetail();
-      showNotification(`同步完成，新增 ${newCount} 封邮件`, 'success');
+      showNotification(`同步完成：收件箱共 ${data.total} 封，新获取 ${newCount} 封`, 'success');
     } else {
       // Check if IMAP is actually connected
       const statusRes = await fetch(apiUrl('/api/status'));
       const statusData = await statusRes.json();
       if (!statusData.connected) {
         showNotification('同步失败：后端未连接，请重新绑定邮箱', 'error');
+      } else if (data.total > 0) {
+        showNotification(`解析 ${data.total} 封邮件失败：可能是邮件格式不兼容。点击 🔍 诊断查看详情`, 'error');
       } else {
-        showNotification('同步完成，收件箱暂无邮件。试试 🔍 诊断连接 查看详情', 'success');
+        showNotification(`同步完成，收件箱暂无邮件 (服务器共 ${data.total || 0} 封)`, 'success');
       }
     }
   } catch (err) {

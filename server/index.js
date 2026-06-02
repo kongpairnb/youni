@@ -46,13 +46,12 @@ app.get('/api/emails', async (req, res) => {
   });
   try {
     await client.connect();
-    const status = await client.status('INBOX', { messages: true });
-    const total = status.messages;
-    if (total === 0) { await client.logout(); return res.json({ emails: [] }); }
     await client.mailboxOpen('INBOX');
+    const total = client.mailbox.exists;
+    if (total === 0) { await client.logout(); return res.json({ emails: [] }); }
     const start = Math.max(1, total - limit + 1);
     const messages = [];
-    for await (const msg of client.fetch(`${start}:${total}`, { uid: false, source: true, flags: true, internalDate: true })) {
+    for await (const msg of client.fetch(`${start}:${total}`, { uid: false, source: true, flags: true })) {
       try {
         const parsed = await simpleParser(msg.source);
         const fromAddr = parsed.from ? parsed.from.value.map(v => v.address).filter(Boolean).join(', ') : '';
@@ -67,11 +66,13 @@ app.get('/api/emails', async (req, res) => {
           read: msg.flags ? !msg.flags.includes('\\Seen') : true,
           hasHtml: !!parsed.html
         });
-      } catch (e) {}
+      } catch (parseErr) {
+        console.error('Parse error:', parseErr.message);
+      }
     }
     await client.logout();
     messages.sort((a, b) => new Date(b.date) - new Date(a.date));
-    res.json({ emails: messages });
+    res.json({ emails: messages, total, fetched: messages.length });
   } catch (err) {
     let hint = err.message;
     if (err.message.includes('connect EHOSTUNREACH') || err.message.includes('connect ETIMEDOUT') || err.message.includes('connect ECONNREFUSED')) {
