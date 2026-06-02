@@ -913,25 +913,35 @@ async function syncEmails() {
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || '同步失败');
     if (data.emails && data.emails.length > 0) {
-      // Merge with existing emails, deduplicate by id
       const existingIds = new Set(emails.map(e => e.id));
-      let newCount = 0;
+      let newCount = 0, updatedCount = 0;
       data.emails.forEach(e => {
         if (!existingIds.has(e.id)) {
-          // Assign to first account if possible
           e.accountId = accounts.length > 0 ? accounts[0].id : 'a1';
           e.read = true;
           emails.unshift(e);
           existingIds.add(e.id);
           newCount++;
+        } else {
+          // Update existing email's body with decoded text
+          const existing = emails.find(em => em.id === e.id);
+          if (existing) {
+            if (e.body && e.body !== existing.body) {
+              existing.body = e.body;
+              updatedCount++;
+            }
+            if (e.subject) existing.subject = e.subject;
+            if (e.from) existing.from = e.from;
+            if (e.date) existing.date = e.date;
+          }
         }
       });
       saveState();
       renderEmailList();
       renderDetail();
-      showNotification(`同步完成：收件箱共 ${data.total} 封，新获取 ${newCount} 封`, 'success');
+      const msg = `同步完成：共 ${data.total} 封，新增 ${newCount} 封` + (updatedCount > 0 ? `，更新 ${updatedCount} 封正文` : '');
+      showNotification(msg, 'success');
     } else {
-      // Check if IMAP is actually connected
       const statusRes = await fetch(apiUrl('/api/status'));
       const statusData = await statusRes.json();
       if (!statusData.connected) {

@@ -220,21 +220,42 @@ function extractBodyFromSource(source) {
   return text.trim();
 }
 
+// Count Chinese characters in a string
+function countChineseChars(s) {
+  let c = 0;
+  for (let i = 0; i < s.length; i++) {
+    const code = s.charCodeAt(i);
+    if (code >= 0x4e00 && code <= 0x9fff) c++;
+  }
+  return c;
+}
+
 // Try bodyParts first, fallback to source parsing
 function getEmailText(bodyParts, source) {
   if (bodyParts && bodyParts instanceof Map) {
-    for (const key of ['TEXT', '1', '1.1', '2', '2.1']) {
+    // Try all available body part keys
+    const keys = [];
+    bodyParts.forEach((v, k) => keys.push(k));
+    // Prioritize text/plain parts
+    const prioritized = ['TEXT', '1', '1.1', '1.2', '2', '2.1', ...keys.filter(k => !['TEXT','1','1.1','1.2','2','2.1'].includes(k))];
+    for (const key of prioritized) {
       if (bodyParts.has(key)) {
         const buf = bodyParts.get(key);
         if (buf && buf.length > 0) {
-          // Try GBK first (common for QQ/Chinese emails), fallback to UTF-8
-          for (const cs of ['gbk', 'utf-8']) {
+          // Try multiple encodings and pick the one with most Chinese characters
+          const candidates = [];
+          for (const cs of ['gbk', 'gb2312', 'utf-8', 'utf8']) {
             try {
               if (iconv.encodingExists(cs)) {
-                const text = iconv.decode(buf, cs).trim();
-                if (text.length > 0) return text;
+                const text = iconv.decode(buf, cs);
+                candidates.push({ text: text.trim(), cn: countChineseChars(text) });
               }
             } catch(e) {}
+          }
+          if (candidates.length > 0) {
+            // Pick the encoding that produces most Chinese characters
+            candidates.sort((a, b) => b.cn - a.cn);
+            if (candidates[0].text.length > 0) return candidates[0].text;
           }
           return buf.toString('utf8').trim();
         }
