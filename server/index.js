@@ -122,8 +122,8 @@ app.get('/api/diagnose', async (req, res) => {
     if (status.messages > 0) {
       result.steps.push('正在尝试获取最新一封邮件...');
       try {
-        for await (const msg of client.fetch('1', { uid: true, source: true, flags: true })) {
-          result.steps.push(`成功获取到邮件，UID=${msg.uid}`);
+        for await (const msg of client.fetch('1:*', { uid: false, source: true, flags: true })) {
+          result.steps.push(`成功获取到邮件，主题: ${msg.subject || '(无主题)'}`);
           break;
         }
       } catch (fetchErr) {
