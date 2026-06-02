@@ -590,6 +590,8 @@ a { color: var(--accent); text-decoration: none; }
     <div style="display:flex;align-items:center;gap:6px;">
       <button onclick="showComposeModal()" style="font-size:12px;color:var(--text-secondary);padding:4px 10px;border-radius:4px;background:var(--bg-elevated);transition:all.15s;font-weight:500;border:1px solid var(--border);" onmouseover="this.style.borderColor='var(--text-tertiary)'" onmouseout="this.style.borderColor='var(--border)'">✎ 写邮件</button>
       <button onclick="showAccountModal()" style="font-size:12px;color:var(--accent);padding:4px 10px;border-radius:4px;background:var(--accent-dim);transition:all.15s;font-weight:500;" onmouseover="this.style.background='rgba(124,222,206,0.15)'" onmouseout="this.style.background='var(--accent-dim)'">+ 绑定邮箱</button>
+      <span id="conn-status" title="未连接后端" style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--text-tertiary);transition:all.3s;"></span>
+      <button id="sync-btn" onclick="syncEmails()" style="font-size:12px;color:var(--text-secondary);padding:4px 8px;border-radius:4px;transition:all.15s;opacity:0.4;pointer-events:none;" title="同步邮件">↻</button>
       <button id="theme-toggle" onclick="toggleTheme()" style="font-size:14px;color:var(--text-secondary);padding:4px 6px;border-radius:4px;transition:all.15s;" onmouseover="this.style.background='var(--bg-hover)'" onmouseout="this.style.background='transparent'" title="切换主题">🌙</button>
     </div>
   </header>
@@ -614,6 +616,7 @@ a { color: var(--accent); text-decoration: none; }
           <div class="account-item" onclick="setFilter('all')" data-filter="all" style="font-size:12px;">📬 全部邮件</div>
           <div class="account-item" onclick="setFilter('today')" data-filter="today" style="font-size:12px;">📌 今日邮件</div>
           <div class="account-item" onclick="setFilter('flagged')" data-filter="flagged" style="font-size:12px;">🏷️ 已标记提醒</div>
+          <div class="account-item" onclick="showTestEmailModal()" style="font-size:12px;">🧪 测试收信</div>
         </div>
       </div>
     </aside>
@@ -639,9 +642,26 @@ a { color: var(--accent); text-decoration: none; }
   <div class="modal">
     <h3>绑定邮箱</h3>
     <label>邮箱地址</label>
-    <input type="email" id="new-account-email" placeholder="your@business.com">
+    <input type="email" id="new-account-email" placeholder="your@qq.com">
     <label>显示名称</label>
-    <input type="text" id="new-account-name" placeholder="工作邮箱">
+    <input type="text" id="new-account-name" placeholder="我的QQ邮箱">
+    <label>邮箱服务商</label>
+    <select id="new-account-provider" onchange="onProviderChange()" style="width:100%;background:var(--bg-elevated);border:1px solid var(--border);border-radius:var(--radius);padding:6px 10px;font-size:13px;color:var(--text);outline:none;">
+      <option value="">请选择...</option>
+      <option value="qq">QQ邮箱 (imap.qq.com:993)</option>
+      <option value="163">网易163邮箱 (imap.163.com:993)</option>
+      <option value="custom">自定义 IMAP</option>
+    </select>
+    <div id="custom-imap-fields" style="display:none;">
+      <label>IMAP 服务器</label>
+      <input type="text" id="new-account-host" placeholder="imap.example.com">
+      <label>端口</label>
+      <input type="number" id="new-account-port" value="993" placeholder="993">
+    </div>
+    <label>IMAP 授权码（密码）</label>
+    <input type="password" id="new-account-password" placeholder="QQ邮箱请使用16位授权码">
+    <label style="margin-top:8px;">后端 API 地址</label>
+    <input type="text" id="new-account-api-base" placeholder="留空=当前服务器">
     <label>颜色标识</label>
     <div style="display:flex;gap:6px;margin-top:4px;" id="color-picker">
       <div class="color-opt" data-color="#7cdece" style="width:24px;height:24px;border-radius:50%;background:#7cdece;cursor:pointer;border:2px solid transparent;transition:all.12s;" onclick="selectColor(this)"></div>
@@ -708,6 +728,24 @@ a { color: var(--accent); text-decoration: none; }
   </div>
 </div>
 
+<!-- Test Email Modal -->
+<div class="modal-overlay" id="test-email-modal">
+  <div class="modal" style="width:480px;">
+    <h3>🧪 测试收信</h3>
+    <p style="font-size:12px;color:var(--text-tertiary);margin:0 0 12px 0;">模拟接收一封邮件，无需真实 IMAP 连接即可验证提取流程</p>
+    <label>发件人</label>
+    <input type="email" id="test-email-from" placeholder="sender@example.com" value="test@test.com">
+    <label>主题</label>
+    <input type="text" id="test-email-subject" placeholder="邮件主题" value="测试邮件">
+    <label>正文</label>
+    <textarea id="test-email-body" rows="6" style="width:100%;background:var(--bg-elevated);border:1px solid var(--border);border-radius:var(--radius);padding:8px 12px;font-size:13px;outline:none;resize:vertical;" placeholder="输入邮件正文...">这是一封测试邮件，合同编号 CT-2026-0999 将于 2026年9月1日 到期，请及时处理。Invoice #INV-2026-0999 deadline is September 15, 2026.</textarea>
+    <div class="modal-actions">
+      <button class="btn-secondary" onclick="closeModal('test-email-modal')">取消</button>
+      <button class="btn-primary" onclick="sendTestEmail()">添加测试邮件</button>
+    </div>
+  </div>
+</div>
+
 <script>
 // ═══════════════════════════════════════════
 // State
@@ -721,6 +759,9 @@ let activeEmailId = null;
 let currentFilter = 'all';
 let currentTheme = 'dark';
 let calendaryYear, calendaryMonth;
+let apiBase = '';
+let imapConnected = false;
+let imapConfig = null; // {email, password, host, port}
 
 function loadState() {
   try {
@@ -732,6 +773,8 @@ function loadState() {
       emails = data.emails || [];
       reminders = data.reminders || [];
       currentTheme = data.theme || 'dark';
+      apiBase = data.apiBase || '';
+      imapConfig = data.imapConfig || null;
     }
   } catch(e) {}
   if (emails.length === 0) initMockData();
@@ -742,7 +785,7 @@ function loadState() {
 }
 
 function saveState() {
-  localStorage.setItem('youni_state', JSON.stringify({ accounts, keywords, emails, reminders, theme: currentTheme }));
+  localStorage.setItem('youni_state', JSON.stringify({ accounts, keywords, emails, reminders, theme: currentTheme, apiBase, imapConfig }));
 }
 
 function applyTheme(theme) {
@@ -755,6 +798,161 @@ function applyTheme(theme) {
 function toggleTheme() {
   applyTheme(currentTheme === 'dark' ? 'light' : 'dark');
   saveState();
+}
+
+// ═══════════════════════════════════════════
+// API & IMAP
+// ═══════════════════════════════════════════
+function apiUrl(path) {
+  const base = apiBase || window.location.origin;
+  return base.replace(/\/+$/, '') + path;
+}
+
+function onProviderChange() {
+  const p = document.getElementById('new-account-provider').value;
+  const customFields = document.getElementById('custom-imap-fields');
+  if (p === 'custom') {
+    customFields.style.display = 'block';
+  } else {
+    customFields.style.display = 'none';
+  }
+}
+
+function showNotification(msg, type) {
+  let el = document.getElementById('notification');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'notification';
+    el.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);padding:10px 20px;border-radius:6px;font-size:13px;z-index:9999;transition:all.3s;opacity:0;pointer-events:none;max-width:80%;text-align:center;';
+    document.body.appendChild(el);
+  }
+  el.textContent = msg;
+  el.style.background = type === 'error' ? 'rgba(248,113,113,0.15)' : type === 'success' ? 'rgba(124,222,206,0.15)' : 'var(--bg-elevated)';
+  el.style.color = type === 'error' ? '#f87171' : type === 'success' ? 'var(--accent)' : 'var(--text)';
+  el.style.border = type === 'error' ? '1px solid rgba(248,113,113,0.3)' : type === 'success' ? '1px solid rgba(124,222,206,0.3)' : '1px solid var(--border)';
+  el.style.opacity = '1';
+  el.style.pointerEvents = 'auto';
+  setTimeout(() => { el.style.opacity = '0'; el.style.pointerEvents = 'none'; }, 4000);
+}
+
+function setConnStatus(connected) {
+  imapConnected = connected;
+  const dot = document.getElementById('conn-status');
+  const btn = document.getElementById('sync-btn');
+  if (dot) {
+    dot.style.background = connected ? '#7cdece' : 'var(--text-tertiary)';
+    dot.title = connected ? '后端已连接' : '未连接后端';
+  }
+  if (btn) {
+    btn.style.opacity = connected ? '1' : '0.4';
+    btn.style.pointerEvents = connected ? 'auto' : 'none';
+  }
+}
+
+async function connectIMAP(email, password, host, port) {
+  try {
+    const res = await fetch(apiUrl('/api/connect'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password, host, port: Number(port) })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || '连接失败');
+    imapConfig = { email, password, host, port: Number(port) };
+    setConnStatus(true);
+    showNotification(data.message || 'IMAP 配置成功', 'success');
+    return true;
+  } catch (err) {
+    showNotification('连接失败: ' + err.message, 'error');
+    setConnStatus(false);
+    return false;
+  }
+}
+
+async function disconnectIMAP() {
+  try {
+    await fetch(apiUrl('/api/disconnect'), { method: 'POST' });
+  } catch(e) {}
+  imapConfig = null;
+  setConnStatus(false);
+  saveState();
+}
+
+async function checkConnection() {
+  try {
+    const res = await fetch(apiUrl('/api/status'));
+    const data = await res.json();
+    if (data.connected) {
+      setConnStatus(true);
+      if (data.email && imapConfig) imapConfig.email = data.email;
+      return true;
+    }
+  } catch(e) {}
+  setConnStatus(false);
+  return false;
+}
+
+async function syncEmails() {
+  const btn = document.getElementById('sync-btn');
+  if (btn) btn.textContent = '⟳';
+  try {
+    const res = await fetch(apiUrl('/api/emails?limit=50'));
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || '同步失败');
+    if (data.emails && data.emails.length > 0) {
+      // Merge with existing emails, deduplicate by id
+      const existingIds = new Set(emails.map(e => e.id));
+      let newCount = 0;
+      data.emails.forEach(e => {
+        if (!existingIds.has(e.id)) {
+          // Assign to first account if possible
+          e.accountId = accounts.length > 0 ? accounts[0].id : 'a1';
+          e.read = true;
+          emails.unshift(e);
+          existingIds.add(e.id);
+          newCount++;
+        }
+      });
+      saveState();
+      renderEmailList();
+      renderDetail();
+      showNotification(`同步完成，新增 ${newCount} 封邮件`, 'success');
+    } else {
+      showNotification('同步完成，收件箱为空', 'success');
+    }
+  } catch (err) {
+    showNotification('同步失败: ' + err.message, 'error');
+  }
+  if (btn) btn.textContent = '↻';
+}
+
+async function sendTestEmail() {
+  const body = document.getElementById('test-email-body')?.value;
+  const subject = document.getElementById('test-email-subject')?.value;
+  const from = document.getElementById('test-email-from')?.value;
+  if (!body) { showNotification('请输入邮件正文', 'error'); return; }
+  try {
+    const res = await fetch(apiUrl('/api/test-email'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ from, subject, body })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || '失败');
+    if (data.email) {
+      data.email.accountId = accounts.length > 0 ? accounts[0].id : 'a1';
+      data.email.read = true;
+      emails.unshift(data.email);
+      activeEmailId = data.email.id;
+      saveState();
+      renderEmailList();
+      renderDetail();
+      showNotification('测试邮件已添加', 'success');
+    }
+    closeModal('test-email-modal');
+  } catch (err) {
+    showNotification('测试失败: ' + err.message, 'error');
+  }
 }
 
 // ═══════════════════════════════════════════
@@ -1093,17 +1291,52 @@ function selectEmail(id) {
 function addAccount() {
   const email = document.getElementById('new-account-email').value.trim();
   const name = document.getElementById('new-account-name').value.trim() || email.split('@')[0];
-  if (!email || !email.includes('@')) { alert('请输入有效的邮箱地址'); return; }
-  if (accounts.some(a => a.email === email)) { alert('该邮箱已绑定'); return; }
-  accounts.push({ id: 'a' + Date.now(), email, name, color: selectedColor });
-  saveState();
-  renderAccounts();
-  closeModal('account-modal');
-  document.getElementById('new-account-email').value = '';
-  document.getElementById('new-account-name').value = '';
+  const password = document.getElementById('new-account-password').value.trim();
+  const provider = document.getElementById('new-account-provider').value;
+  const apiInput = document.getElementById('new-account-api-base').value.trim();
+
+  if (!email || !email.includes('@')) { showNotification('请输入有效的邮箱地址', 'error'); return; }
+  if (!password) { showNotification('请输入 IMAP 授权码', 'error'); return; }
+  if (!provider) { showNotification('请选择邮箱服务商', 'error'); return; }
+  if (accounts.some(a => a.email === email)) { showNotification('该邮箱已绑定', 'error'); return; }
+
+  // Determine host/port
+  let host, port;
+  if (provider === 'qq') { host = 'imap.qq.com'; port = 993; }
+  else if (provider === '163') { host = 'imap.163.com'; port = 993; }
+  else if (provider === 'custom') {
+    host = document.getElementById('new-account-host').value.trim();
+    port = parseInt(document.getElementById('new-account-port').value);
+    if (!host) { showNotification('请输入 IMAP 服务器地址', 'error'); return; }
+    if (!port) { showNotification('请输入 IMAP 端口', 'error'); return; }
+  }
+
+  // Save API base
+  if (apiInput) apiBase = apiInput;
+
+  // Connect to IMAP via backend
+  connectIMAP(email, password, host, port).then(success => {
+    if (success) {
+      accounts.push({ id: 'a' + Date.now(), email, name, color: selectedColor });
+      saveState();
+      renderAccounts();
+      closeModal('account-modal');
+      document.getElementById('new-account-email').value = '';
+      document.getElementById('new-account-name').value = '';
+      document.getElementById('new-account-password').value = '';
+      document.getElementById('new-account-provider').value = '';
+      document.getElementById('new-account-api-base').value = '';
+      // Auto sync after bind
+      setTimeout(syncEmails, 500);
+    }
+  });
 }
 
-function showAccountModal() { document.getElementById('account-modal').classList.add('open'); }
+function showAccountModal() {
+  document.getElementById('account-modal').classList.add('open');
+  const apiInput = document.getElementById('new-account-api-base');
+  if (apiInput) apiInput.value = apiBase;
+}
 
 function selectColor(el) {
   document.querySelectorAll('.color-opt').forEach(c => c.style.borderColor = 'transparent');
@@ -1112,6 +1345,8 @@ function selectColor(el) {
 }
 
 function showKeywordModal() { document.getElementById('keyword-modal').classList.add('open'); document.getElementById('new-keyword').focus(); }
+
+function showTestEmailModal() { document.getElementById('test-email-modal').classList.add('open'); }
 
 function addKeyword() {
   const word = document.getElementById('new-keyword').value.trim();
@@ -1271,6 +1506,14 @@ renderAccounts();
 renderKeywords();
 renderEmailList();
 renderDetail();
+
+// Check backend connection on load
+checkConnection().then(connected => {
+  if (!connected && imapConfig) {
+    // Stored IMAP config exists - reconnect
+    connectIMAP(imapConfig.email, imapConfig.password, imapConfig.host, imapConfig.port);
+  }
+});
 
 // Close modals on overlay click
 document.querySelectorAll('.modal-overlay').forEach(el => {
