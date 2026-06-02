@@ -51,7 +51,7 @@ app.get('/api/emails', async (req, res) => {
     if (total === 0) { await client.logout(); return res.json({ emails: [] }); }
     const start = Math.max(1, total - limit + 1);
     const messages = [];
-    for await (const msg of client.fetch(`${start}:${total}`, { uid: true, source: true, flags: true, internalDate: true })) {
+    for await (const msg of client.fetch(`${start}:${total}`, { uid: false, source: true, flags: true, internalDate: true })) {
       try {
         const parsed = await simpleParser(msg.source);
         const fromAddr = parsed.from ? parsed.from.value.map(v => v.address).filter(Boolean).join(', ') : '';
@@ -110,12 +110,13 @@ app.get('/api/diagnose', async (req, res) => {
 
     result.steps.push('正在列出邮箱文件夹...');
     const mailboxes = [];
-    for await (const mb of client.list()) {
-      if (!mb.path.includes('[') && !mb.path.includes('Gmail')) {
-        mailboxes.push(mb.path);
-      }
-      if (mailboxes.length >= 5) break;
-    }
+    try {
+      client.mailboxes.forEach((mb, path) => {
+        if (path && !path.startsWith('[') && mailboxes.length < 5) {
+          mailboxes.push(path);
+        }
+      });
+    } catch(e) {}
     result.steps.push(`找到文件夹: ${mailboxes.join(', ') || '仅 INBOX'}`);
 
     if (status.messages > 0) {
