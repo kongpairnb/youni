@@ -131,9 +131,30 @@ app.get('/api/diagnose', async (req, res) => {
       }
       result.steps.push('正在尝试获取最新一封邮件...');
       try {
-        for await (const msg of client.fetch('1:*', { uid: false, source: true, flags: true })) {
-          result.steps.push(`成功获取到邮件`);
-          break;
+        const msg = await client.fetchOne('1:*', { source: true, flags: true, envelope: true });
+        if (msg) {
+          result.steps.push(`成功获取到邮件 seq=${msg.seq} uid=${msg.uid}`);
+          if (msg.envelope) {
+            result.steps.push(`主题: ${msg.envelope.subject || '(无主题)'}`);
+            result.steps.push(`发件人: ${msg.envelope.from && msg.envelope.from[0] ? msg.envelope.from[0].address : '未知'}`);
+          }
+          if (msg.source) {
+            result.steps.push(`邮件原始大小: ${msg.source.length} 字节`);
+            try {
+              const { simpleParser } = require('mailparser');
+              const parsed = await simpleParser(msg.source);
+              result.steps.push(`解析成功! 主题: ${parsed.subject || '(无)'}, 正文长度: ${(parsed.text || '').length} 字符`);
+            } catch (parseErr) {
+              result.steps.push(`解析失败: ${parseErr.message}`);
+              // Try a different approach - show first 200 bytes of source
+              const preview = msg.source.slice(0, 200).toString('utf8').replace(/\n/g, '\\n').replace(/\r/g, '');
+              result.steps.push(`原始内容前200字节: ${preview}`);
+            }
+          } else {
+            result.steps.push('警告: source 字段为空!');
+          }
+        } else {
+          result.steps.push('fetchOne 返回空');
         }
       } catch (fetchErr) {
         result.steps.push(`获取邮件失败: ${fetchErr.message}`);
