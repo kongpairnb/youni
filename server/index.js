@@ -2,7 +2,6 @@ const express = require('express');
 const path = require('path');
 const cors = require('cors');
 const { ImapFlow } = require('imapflow');
-const { simpleParser } = require('mailparser');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -13,6 +12,53 @@ app.use(express.json({ limit: '5mb' }));
 
 let imapConfig = null;
 
+// Simple email source parser - extracts body text from raw email source
+function parseBodyFromSource(source) {
+  if (!source || !Buffer.isBuffer(source)) return '';
+  let str = source.toString('utf8');
+  // Headers end at first blank line (\r\n\r\n or \n\n)
+  const headerEnd = str.indexOf('\r\n\r\n');
+  const headerEnd2 = str.indexOf('\n\n');
+  const splitIdx = headerEnd >= 0 ? headerEnd + 4 : (headerEnd2 >= 0 ? headerEnd2 + 2 : -1);
+  let body = splitIdx >= 0 ? str.slice(splitIdx) : str;
+
+  // Remove MIME boundaries and transfer encoding
+  body = body.replace(/^--.*\r?\n/gm, '');
+  body = body.replace(/^Content-.*\r?\n/gi, '');
+  body = body.replace(/^\s*$/gm, '\n');
+
+  // Decode quoted-printable (basic)
+  body = body.replace(/=([0-9A-F]{2})/gi, (m, c) => String.fromCharCode(parseInt(c, 16)));
+
+  // Remove HTML tags
+  body = body.replace(/<[^>]+>/g, '');
+
+  // Remove excess blank lines
+  body = body.replace(/\n{3,}/g, '\n\n');
+
+  return body.trim();
+}
+
+function getEmailText(bodyParts, source) {
+  // Try bodyParts first
+  if (bodyParts) {
+    if (bodyParts instanceof Map) {
+      // Try common body part keys
+      for (const key of ['TEXT', '1', '1.1', '2', '2.1']) {
+        if (bodyParts.has(key)) {
+          const buf = bodyParts.get(key);
+          if (buf && buf.length > 0) return buf.toString('utf8').trim();
+        }
+      }
+    }
+  }
+  // Fallback to parsing source
+  return parseBodyFromSource(source);
+}
+
+// ========================================
+// API: Configure IMAP
+// ========================================
 app.post('/api/connect', (req, res) => {
   const { email, password, host, port } = req.body;
   if (!email || !password || !host || !port) {
@@ -31,6 +77,9 @@ app.get('/api/status', (req, res) => {
   res.json({ connected: !!imapConfig, email: imapConfig?.email || null });
 });
 
+// ========================================
+// API: Fetch emails from IMAP
+// ========================================
 app.get('/api/emails', async (req, res) => {
   if (!imapConfig) {
     return res.status(400).json({ error: '未配置邮箱，请先调用 /api/connect' });
@@ -48,49 +97,65 @@ app.get('/api/emails', async (req, res) => {
     await client.connect();
     await client.mailboxOpen('INBOX');
     const total = client.mailbox.exists;
-    if (total === 0) { await client.logout(); return res.json({ emails: [] }); }
+    if (total === 0) { await client.logout(); return res.json({ emails: [], total: 0, fetched: 0 }); }
+
     const start = Math.max(1, total - limit + 1);
     const messages = [];
-    for await (const msg of client.fetch(`${start}:${total}`, { uid: false, source: true, flags: true })) {
-      try {
-        const parsed = await simpleParser(msg.source);
-        const fromAddr = parsed.from ? parsed.from.value.map(v => v.address).filter(Boolean).join(', ') : '';
-        const toAddr = parsed.to ? parsed.to.value.map(v => v.address).filter(Boolean).join(', ') : '';
-        messages.push({
-          id: String(msg.uid),
-          from: fromAddr,
-          to: toAddr,
-          subject: parsed.subject || '(无主题)',
-          body: parsed.text || parsed.html?.replace(/<[^>]+>/g, '') || '',
-          date: parsed.date ? parsed.date.toISOString() : (msg.internalDate ? new Date(msg.internalDate).toISOString() : new Date().toISOString()),
-          read: msg.flags ? !msg.flags.includes('\\Seen') : true,
-          hasHtml: !!parsed.html
-        });
-      } catch (parseErr) {
-        console.error('Parse error:', parseErr.message);
-      }
+
+    for await (const msg of client.fetch(`${start}:${total}`, {
+      uid: false,
+      envelope: true,
+      bodyParts: ['TEXT', '1'],
+      source: true,
+      flags: true
+    })) {
+      const fromAddr = msg.envelope?.from?.map(v => v.address).filter(Boolean).join(', ') || '';
+      const toAddr = msg.envelope?.to?.map(v => v.address).filter(Boolean).join(', ') || '';
+      const body = getEmailText(msg.bodyParts, msg.source);
+      messages.push({
+        id: String(msg.uid),
+        from: fromAddr,
+        to: toAddr,
+        subject: msg.envelope?.subject || '(无主题)',
+        body: body,
+        date: msg.envelope?.date ? msg.envelope.date.toISOString() : new Date().toISOString(),
+        read: msg.flags ? !msg.flags.has('\\Seen') : true,
+        hasHtml: false
+      });
     }
+
     await client.logout();
     messages.sort((a, b) => new Date(b.date) - new Date(a.date));
     res.json({ emails: messages, total, fetched: messages.length });
   } catch (err) {
     let hint = err.message;
-    if (err.message.includes('connect EHOSTUNREACH') || err.message.includes('connect ETIMEDOUT') || err.message.includes('connect ECONNREFUSED')) {
-      hint = '无法连接到 IMAP 服务器。当前环境可能网络受限，请部署到 Render/Railway 等公网服务后使用。';
+    if (err.message.includes('EHOSTUNREACH') || err.message.includes('ETIMEDOUT') || err.message.includes('ECONNREFUSED')) {
+      hint = '无法连接到 IMAP 服务器。当前环境可能网络受限，请部署到公网服务后使用。';
     } else if (err.message.includes('authentication') || err.message.includes('Auth')) {
       hint = 'IMAP 认证失败：授权码错误或已过期。请重新在邮箱设置中生成新的授权码。';
     } else if (err.message.includes('LOGOUT')) {
-      hint = 'IMAP 登录被拒绝：请检查授权码和邮箱地址是否正确。QQ邮箱请使用16位授权码而非登录密码。';
+      hint = 'IMAP 登录被拒绝：请检查授权码和邮箱地址是否正确。QQ邮箱请使用16位授权码。';
     }
     res.status(500).json({ error: hint });
   }
 });
 
+// ========================================
+// API: Diagnose IMAP connection
+// ========================================
 app.get('/api/diagnose', async (req, res) => {
   if (!imapConfig) {
-    return res.json({ connected: false, error: '未配置 IMAP，请先绑定邮箱', steps: [] });
+    return res.json({ connected: false, error: '未配置 IMAP', steps: ['请先绑定邮箱'] });
   }
-  const result = { connected: false, email: imapConfig.email, host: imapConfig.host, port: imapConfig.port, steps: [], error: null };
+  const result = {
+    connected: false,
+    email: imapConfig.email,
+    host: imapConfig.host,
+    port: imapConfig.port,
+    steps: [],
+    error: null
+  };
+
   const client = new ImapFlow({
     host: imapConfig.host,
     port: imapConfig.port,
@@ -99,83 +164,87 @@ app.get('/api/diagnose', async (req, res) => {
     auth: { user: imapConfig.email, pass: imapConfig.password },
     logger: false
   });
+
   try {
-    result.steps.push('正在连接 IMAP 服务器...');
+    result.steps.push('[1/6] 正在连接 IMAP 服务器...');
     await client.connect();
-    result.steps.push('TCP/TLS 连接成功');
+    result.steps.push('  ✅ TCP/TLS 连接成功');
     result.connected = true;
 
-    result.steps.push('正在查询 INBOX 状态...');
-    const status = await client.status('INBOX', { messages: true, unseen: true, recent: true });
-    result.steps.push(`INBOX 状态: 共 ${status.messages} 封邮件, ${status.unseen || 0} 封未读`);
+    result.steps.push('[2/6] 正在查询 INBOX 状态...');
+    const status = await client.status('INBOX', { messages: true, unseen: true });
+    result.steps.push(`  ✅ INBOX: 共 ${status.messages} 封, ${status.unseen || 0} 封未读`);
     result.totalMessages = status.messages;
 
-    result.steps.push('正在列出邮箱文件夹...');
-    const mailboxes = [];
-    try {
-      client.mailboxes.forEach((mb, path) => {
-        if (path && !path.startsWith('[') && mailboxes.length < 5) {
-          mailboxes.push(path);
-        }
-      });
-    } catch(e) {}
-    result.steps.push(`找到文件夹: ${mailboxes.join(', ') || '仅 INBOX'}`);
-
-    if (status.messages > 0) {
-      result.steps.push('正在打开收件箱...');
-      try {
-        await client.mailboxOpen('INBOX');
-        result.steps.push('收件箱已打开');
-      } catch (openErr) {
-        result.steps.push(`打开收件箱失败: ${openErr.message}`);
-      }
-      result.steps.push('正在尝试获取最新一封邮件...');
-      try {
-        const lastSeq = client.mailbox.exists;
-        const msg = await client.fetchOne(`${lastSeq}`, { source: true, flags: true, envelope: true });
-        if (msg) {
-          result.steps.push(`成功获取到邮件 seq=${msg.seq} uid=${msg.uid}`);
-          if (msg.envelope) {
-            result.steps.push(`主题: ${msg.envelope.subject || '(无主题)'}`);
-            result.steps.push(`发件人: ${msg.envelope.from && msg.envelope.from[0] ? msg.envelope.from[0].address : '未知'}`);
-          }
-          if (msg.source) {
-            result.steps.push(`邮件原始大小: ${msg.source.length} 字节`);
-            try {
-              const { simpleParser } = require('mailparser');
-              const parsed = await simpleParser(msg.source);
-              result.steps.push(`解析成功! 主题: ${parsed.subject || '(无)'}, 正文长度: ${(parsed.text || '').length} 字符`);
-            } catch (parseErr) {
-              result.steps.push(`解析失败: ${parseErr.message}`);
-              // Try a different approach - show first 200 bytes of source
-              const preview = msg.source.slice(0, 200).toString('utf8').replace(/\n/g, '\\n').replace(/\r/g, '');
-              result.steps.push(`原始内容前200字节: ${preview}`);
-            }
-          } else {
-            result.steps.push('警告: source 字段为空!');
-          }
-        } else {
-          result.steps.push('fetchOne 返回空');
-        }
-      } catch (fetchErr) {
-        result.steps.push(`获取邮件失败: ${fetchErr.message}`);
-      }
+    if (status.messages === 0) {
+      result.steps.push('[3/6] 跳过收件箱为空');
+      result.steps.push('结论: 连接成功但收件箱为空');
+      await client.logout();
+      return res.json(result);
     }
 
+    result.steps.push('[3/6] 正在打开收件箱...');
+    await client.mailboxOpen('INBOX');
+    result.steps.push('  ✅ 收件箱已打开');
+
+    result.steps.push('[4/6] 正在获取最新邮件 (envelope)...');
+    const lastSeq = client.mailbox.exists;
+    const msg = await client.fetchOne(`${lastSeq}`, {
+      uid: false,
+      envelope: true,
+      bodyParts: ['TEXT', '1'],
+      source: true,
+      flags: true
+    });
+
+    if (!msg) {
+      result.steps.push('  ❌ fetchOne 返回空');
+      await client.logout();
+      return res.json(result);
+    }
+
+    const envelope = msg.envelope || {};
+    result.steps.push(`  ✅ 获取成功! seq=${msg.seq}, uid=${msg.uid}`);
+    result.steps.push(`  📧 主题: ${envelope.subject || '(无主题)'}`);
+    result.steps.push(`  📧 发件人: ${envelope.from?.[0]?.address || '未知'}`);
+    result.steps.push(`  📧 收件人: ${envelope.to?.[0]?.address || '未知'}`);
+    result.steps.push(`  📧 日期: ${envelope.date ? envelope.date.toISOString() : '未知'}`);
+
+    // Check body
+    const body = getEmailText(msg.bodyParts, msg.source);
+    result.steps.push(`  📝 正文长度: ${body.length} 字符`);
+    if (body.length > 0) {
+      result.steps.push(`  📝 正文预览: ${body.slice(0, 100).replace(/\n/g, ' ')}`);
+    } else if (msg.source && msg.source.length > 0) {
+      // Try raw source parsing
+      const raw = parseBodyFromSource(msg.source);
+      result.steps.push(`  📝 原始解析正文长度: ${raw.length} 字符`);
+      result.steps.push(`  📝 原始大小: ${msg.source.length} 字节`);
+    } else {
+      result.steps.push('  ⚠️ 无法获取正文内容');
+    }
+
+    result.steps.push('[5/6] 断开连接...');
     await client.logout();
-    result.steps.push('IMAP 已断开连接');
+    result.steps.push('  ✅ IMAP 已断开');
+
+    result.steps.push('[6/6] 结论: 连接成功, 可以正常收信');
   } catch (err) {
     result.error = err.message;
-    result.steps.push(`错误: ${err.message}`);
+    result.steps.push(`  ❌ 错误: ${err.message}`);
     if (err.message.includes('connect')) {
-      result.steps.push('提示: Railway 服务器可能无法连接到 QQ 的 IMAP 服务器，请检查网络');
+      result.steps.push('  💡 提示: 服务器无法连接到 QQ/163 IMAP 服务器');
     } else if (err.message.includes('auth') || err.message.includes('Auth') || err.message.includes('LOGIN')) {
-      result.steps.push('提示: 授权码错误或已过期，请在 QQ 邮箱重新生成 16 位授权码');
+      result.steps.push('  💡 提示: 授权码错误或已过期，请重新生成16位授权码');
     }
+    try { await client.logout(); } catch(e) {}
   }
   res.json(result);
 });
 
+// ========================================
+// API: Test email (no IMAP needed)
+// ========================================
 app.post('/api/test-email', (req, res) => {
   const { from, subject, body } = req.body;
   if (!body) return res.status(400).json({ error: '缺少邮件正文' });
@@ -192,6 +261,7 @@ app.post('/api/test-email', (req, res) => {
   });
 });
 
+// Serve frontend for all non-API routes
 app.get('*', (req, res) => {
   if (req.path.startsWith('/api/')) return res.status(404).json({ error: 'Not found' });
   res.sendFile(path.resolve(__dirname, '..', 'index.html'));
