@@ -84,6 +84,66 @@ app.get('/api/emails', async (req, res) => {
   }
 });
 
+app.get('/api/diagnose', async (req, res) => {
+  if (!imapConfig) {
+    return res.json({ connected: false, error: '未配置 IMAP，请先绑定邮箱', steps: [] });
+  }
+  const result = { connected: false, email: imapConfig.email, host: imapConfig.host, port: imapConfig.port, steps: [], error: null };
+  const client = new ImapFlow({
+    host: imapConfig.host,
+    port: imapConfig.port,
+    secure: true,
+    tls: { rejectUnauthorized: false },
+    auth: { user: imapConfig.email, pass: imapConfig.password },
+    logger: false
+  });
+  try {
+    result.steps.push('正在连接 IMAP 服务器...');
+    await client.connect();
+    result.steps.push('TCP/TLS 连接成功');
+    result.connected = true;
+
+    result.steps.push('正在查询 INBOX 状态...');
+    const status = await client.status('INBOX', { messages: true, unseen: true, recent: true });
+    result.steps.push(`INBOX 状态: 共 ${status.messages} 封邮件, ${status.unseen || 0} 封未读`);
+    result.totalMessages = status.messages;
+
+    result.steps.push('正在列出邮箱文件夹...');
+    const mailboxes = [];
+    for await (const mb of client.list()) {
+      if (!mb.path.includes('[') && !mb.path.includes('Gmail')) {
+        mailboxes.push(mb.path);
+      }
+      if (mailboxes.length >= 5) break;
+    }
+    result.steps.push(`找到文件夹: ${mailboxes.join(', ') || '仅 INBOX'}`);
+
+    if (status.messages > 0) {
+      result.steps.push('正在尝试获取最新一封邮件...');
+      try {
+        for await (const msg of client.fetch('1', { uid: true, source: true, flags: true })) {
+          result.steps.push(`成功获取到邮件，UID=${msg.uid}`);
+          break;
+        }
+      } catch (fetchErr) {
+        result.steps.push(`获取邮件失败: ${fetchErr.message}`);
+      }
+    }
+
+    await client.logout();
+    result.steps.push('IMAP 已断开连接');
+  } catch (err) {
+    result.error = err.message;
+    result.steps.push(`错误: ${err.message}`);
+    if (err.message.includes('connect')) {
+      result.steps.push('提示: Railway 服务器可能无法连接到 QQ 的 IMAP 服务器，请检查网络');
+    } else if (err.message.includes('auth') || err.message.includes('Auth') || err.message.includes('LOGIN')) {
+      result.steps.push('提示: 授权码错误或已过期，请在 QQ 邮箱重新生成 16 位授权码');
+    }
+  }
+  res.json(result);
+});
+
 app.post('/api/test-email', (req, res) => {
   const { from, subject, body } = req.body;
   if (!body) return res.status(400).json({ error: '缺少邮件正文' });

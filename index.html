@@ -617,6 +617,7 @@ a { color: var(--accent); text-decoration: none; }
           <div class="account-item" onclick="setFilter('today')" data-filter="today" style="font-size:12px;">📌 今日邮件</div>
           <div class="account-item" onclick="setFilter('flagged')" data-filter="flagged" style="font-size:12px;">🏷️ 已标记提醒</div>
           <div class="account-item" onclick="showTestEmailModal()" style="font-size:12px;">🧪 测试收信</div>
+          <div class="account-item" onclick="runDiagnose()" style="font-size:12px;">🔍 诊断连接</div>
           <div class="account-item" onclick="resetAllData()" style="font-size:12px;color:var(--text-tertiary);">🔄 重置数据</div>
         </div>
       </div>
@@ -743,6 +744,17 @@ a { color: var(--accent); text-decoration: none; }
     <div class="modal-actions">
       <button class="btn-secondary" onclick="closeModal('test-email-modal')">取消</button>
       <button class="btn-primary" onclick="sendTestEmail()">添加测试邮件</button>
+    </div>
+  </div>
+</div>
+
+<!-- Diagnose Modal -->
+<div class="modal-overlay" id="diagnose-modal">
+  <div class="modal" style="width:520px;">
+    <h3>🔍 连接诊断</h3>
+    <div id="diagnose-result" style="font-size:12px;line-height:1.8;max-height:400px;overflow-y:auto;background:var(--bg-elevated);padding:12px;border-radius:var(--radius);white-space:pre-wrap;font-family:monospace;"></div>
+    <div class="modal-actions">
+      <button class="btn-secondary" onclick="closeModal('diagnose-modal')">关闭</button>
     </div>
   </div>
 </div>
@@ -919,12 +931,54 @@ async function syncEmails() {
       renderDetail();
       showNotification(`同步完成，新增 ${newCount} 封邮件`, 'success');
     } else {
-      showNotification('同步完成，收件箱为空', 'success');
+      // Check if IMAP is actually connected
+      const statusRes = await fetch(apiUrl('/api/status'));
+      const statusData = await statusRes.json();
+      if (!statusData.connected) {
+        showNotification('同步失败：后端未连接，请重新绑定邮箱', 'error');
+      } else {
+        showNotification('同步完成，收件箱暂无邮件。试试 🔍 诊断连接 查看详情', 'success');
+      }
     }
   } catch (err) {
     showNotification('同步失败: ' + err.message, 'error');
   }
   if (btn) btn.textContent = '↻';
+}
+
+async function runDiagnose() {
+  document.getElementById('diagnose-modal').classList.add('open');
+  const el = document.getElementById('diagnose-result');
+  el.textContent = '正在诊断，请稍候...\n';
+
+  function append(text) { el.textContent += text + '\n'; el.scrollTop = el.scrollHeight; }
+
+  try {
+    const res = await fetch(apiUrl('/api/diagnose'));
+    const data = await res.json();
+    append('---');
+    append('邮箱: ' + data.email);
+    append('服务器: ' + data.host + ':' + data.port);
+    append('---');
+    data.steps.forEach(s => append(s));
+    append('---');
+    if (data.connected) {
+      append('结论: IMAP 连接成功');
+      if (data.totalMessages === 0) {
+        append('但是收件箱为空，请确认：');
+        append('  1. QQ邮箱是否已开启 IMAP 服务');
+        append('  2. 是否有邮件在收件箱（不是在垃圾箱或其他文件夹）');
+        append('  3. 试试用其他 IMAP 客户端（如手机邮件App）能否正常收信');
+      } else {
+        append(`收件箱有 ${data.totalMessages} 封邮件，请刷新同步`);
+      }
+    } else {
+      append('结论: IMAP 连接失败');
+      if (data.error) append('错误详情: ' + data.error);
+    }
+  } catch (err) {
+    append('无法连接到后端 API: ' + err.message);
+  }
 }
 
 async function sendTestEmail() {
