@@ -49,6 +49,7 @@ app.get('/api/emails', async (req, res) => {
     const status = await client.status('INBOX', { messages: true });
     const total = status.messages;
     if (total === 0) { await client.logout(); return res.json({ emails: [] }); }
+    await client.mailboxOpen('INBOX');
     const start = Math.max(1, total - limit + 1);
     const messages = [];
     for await (const msg of client.fetch(`${start}:${total}`, { uid: false, source: true, flags: true, internalDate: true })) {
@@ -120,10 +121,17 @@ app.get('/api/diagnose', async (req, res) => {
     result.steps.push(`找到文件夹: ${mailboxes.join(', ') || '仅 INBOX'}`);
 
     if (status.messages > 0) {
+      result.steps.push('正在打开收件箱...');
+      try {
+        await client.mailboxOpen('INBOX');
+        result.steps.push('收件箱已打开');
+      } catch (openErr) {
+        result.steps.push(`打开收件箱失败: ${openErr.message}`);
+      }
       result.steps.push('正在尝试获取最新一封邮件...');
       try {
         for await (const msg of client.fetch('1:*', { uid: false, source: true, flags: true })) {
-          result.steps.push(`成功获取到邮件，主题: ${msg.subject || '(无主题)'}`);
+          result.steps.push(`成功获取到邮件`);
           break;
         }
       } catch (fetchErr) {
