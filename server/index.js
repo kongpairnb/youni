@@ -131,7 +131,8 @@ app.get('/api/diagnose', async (req, res) => {
       }
       result.steps.push('正在尝试获取最新一封邮件...');
       try {
-        const msg = await client.fetchOne('1:*', { source: true, flags: true, envelope: true });
+        const lastSeq = client.mailbox.exists;
+        const msg = await client.fetchOne(`${lastSeq}`, { source: true, flags: true, envelope: true });
         if (msg) {
           result.steps.push(`成功获取到邮件 seq=${msg.seq} uid=${msg.uid}`);
           if (msg.envelope) {
