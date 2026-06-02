@@ -2,6 +2,7 @@ const express = require('express');
 const path = require('path');
 const cors = require('cors');
 const { ImapFlow } = require('imapflow');
+const iconv = require('iconv-lite');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -12,48 +13,236 @@ app.use(express.json({ limit: '5mb' }));
 
 let imapConfig = null;
 
-// Simple email source parser - extracts body text from raw email source
-function parseBodyFromSource(source) {
-  if (!source || !Buffer.isBuffer(source)) return '';
-  let str = source.toString('utf8');
-  // Headers end at first blank line (\r\n\r\n or \n\n)
-  const headerEnd = str.indexOf('\r\n\r\n');
-  const headerEnd2 = str.indexOf('\n\n');
-  const splitIdx = headerEnd >= 0 ? headerEnd + 4 : (headerEnd2 >= 0 ? headerEnd2 + 2 : -1);
-  let body = splitIdx >= 0 ? str.slice(splitIdx) : str;
-
-  // Remove MIME boundaries and transfer encoding
-  body = body.replace(/^--.*\r?\n/gm, '');
-  body = body.replace(/^Content-.*\r?\n/gi, '');
-  body = body.replace(/^\s*$/gm, '\n');
-
-  // Decode quoted-printable (basic)
-  body = body.replace(/=([0-9A-F]{2})/gi, (m, c) => String.fromCharCode(parseInt(c, 16)));
-
-  // Remove HTML tags
-  body = body.replace(/<[^>]+>/g, '');
-
-  // Remove excess blank lines
-  body = body.replace(/\n{3,}/g, '\n\n');
-
-  return body.trim();
+// Extract header value from raw source (case-insensitive)
+function getHeader(source, name) {
+  if (!source || !Buffer.isBuffer(source)) return null;
+  // Find header in raw bytes (headers are ASCII, so safe to search in buffer)
+  const prefix = Buffer.from(name + ':', 'ascii');
+  let idx = 0;
+  while (idx < source.length) {
+    // Check if current position starts with the header name (case-insensitive)
+    let match = true;
+    for (let i = 0; i < prefix.length; i++) {
+      const a = source[idx + i];
+      const b = prefix[i];
+      if (a === undefined) { match = false; break; }
+      // Case-insensitive comparison for alpha chars
+      if (a >= 65 && a <= 90) { // uppercase
+        if (a !== b && a + 32 !== b) { match = false; break; }
+      } else if (a >= 97 && a <= 122) { // lowercase
+        if (a !== b && a - 32 !== b) { match = false; break; }
+      } else {
+        if (a !== b) { match = false; break; }
+      }
+    }
+    if (match) {
+      const start = idx + prefix.length;
+      // Read until end of line (\r\n or \n)
+      let end = start;
+      while (end < source.length && source[end] !== 0x0a) end++;
+      // Handle continuation lines (starting with space or tab)
+      let val = source.slice(start, end).toString('ascii').trim();
+      while (end + 1 < source.length) {
+        const next = end + 1;
+        if (source[next] === 0x20 || source[next] === 0x09) {
+          end = next + 1;
+          while (end < source.length && source[end] !== 0x0a) end++;
+          val += ' ' + source.slice(next + 1, end).toString('ascii').trim();
+        } else break;
+      }
+      return val;
+    }
+    // Move to next line
+    while (idx < source.length && source[idx] !== 0x0a) idx++;
+    idx++; // skip \n
+    if (idx < source.length && source[idx - 1] === 0x0d && source[idx] === 0x0a) idx++; // skip \n after \r\n
+  }
+  return null;
 }
 
+// Decode MIME encoded words like =?UTF-8?B?xxx?= or =?GBK?Q?xxx?=
+function decodeMimeWords(str) {
+  if (!str) return str;
+  return str.replace(/=\?([^?]+)\?([BbQq])\?([^?]*)\?=/g, (m, charset, encoding, text) => {
+    try {
+      const buf = encoding.toUpperCase() === 'B'
+        ? Buffer.from(text, 'base64')
+        : decodeQuotedPrintable(Buffer.from(text, 'ascii'));
+      return iconv.decode(buf, charset);
+    } catch(e) {
+      return m;
+    }
+  });
+}
+
+// Decode quoted-printable buffer
+function decodeQuotedPrintable(buf) {
+  const result = [];
+  for (let i = 0; i < buf.length; i++) {
+    if (buf[i] === 0x3d && i + 2 < buf.length) { // '='
+      const hex = String.fromCharCode(buf[i+1], buf[i+2]);
+      result.push(parseInt(hex, 16));
+      i += 2;
+    } else if (buf[i] !== 0x0d) { // skip \r
+      result.push(buf[i]);
+    }
+  }
+  return Buffer.from(result);
+}
+
+// Decode body content based on Content-Transfer-Encoding and charset
+function decodeBody(bodyBuf, charset, encoding) {
+  if (!bodyBuf || bodyBuf.length === 0) return '';
+  let decoded;
+  const enc = (encoding || '').toLowerCase().trim();
+  if (enc === 'base64') {
+    decoded = Buffer.from(bodyBuf.toString('ascii').replace(/[\s\r\n]+/g, ''), 'base64');
+  } else if (enc === 'quoted-printable') {
+    decoded = decodeQuotedPrintable(bodyBuf);
+  } else {
+    decoded = bodyBuf;
+  }
+  const cs = (charset || 'utf-8').toLowerCase().trim();
+  try {
+    if (iconv.encodingExists(cs)) {
+      return iconv.decode(decoded, cs);
+    }
+  } catch(e) {}
+  return decoded.toString('utf8');
+}
+
+// Find the body part in raw email source (handles multipart and single part)
+function findBodyPart(source, parentContentType) {
+  if (!source || !Buffer.isBuffer(source)) return { text: '', isHtml: false };
+
+  const headerEnd = findHeaderEnd(source);
+  if (headerEnd < 0) return { text: '', isHtml: false };
+
+  const headerSection = source.slice(0, headerEnd);
+  const bodySection = source.slice(headerEnd);
+
+  const ct = getHeader(headerSection, 'content-type') || 'text/plain';
+  const cte = getHeader(headerSection, 'content-transfer-encoding') || '';
+  const charset = extractParam(ct, 'charset') || 'utf-8';
+
+  // Check for multipart
+  const boundary = extractParam(ct, 'boundary');
+  if (boundary) {
+    return parseMultipart(bodySection, boundary);
+  }
+
+  // Single part
+  const isHtml = ct.includes('text/html');
+  return { text: decodeBody(bodySection, charset, cte), isHtml };
+}
+
+function findHeaderEnd(source) {
+  // Find \r\n\r\n or \n\n
+  for (let i = 0; i < source.length - 3; i++) {
+    if (source[i] === 0x0d && source[i+1] === 0x0a && source[i+2] === 0x0d && source[i+3] === 0x0a) return i + 4;
+  }
+  for (let i = 0; i < source.length - 1; i++) {
+    if (source[i] === 0x0a && source[i+1] === 0x0a) return i + 2;
+  }
+  return -1;
+}
+
+function extractParam(contentType, param) {
+  const re = new RegExp(param + '\\s*=\\s*["\']?([^"\';\\s]+)', 'i');
+  const m = contentType.match(re);
+  return m ? m[1] : null;
+}
+
+function parseMultipart(source, boundary) {
+  const b = Buffer.from('--' + boundary);
+  const e = Buffer.from('--' + boundary + '--');
+  let text = '';
+  let html = '';
+
+  let start = 0;
+  while (start < source.length) {
+    // Find next boundary
+    const partStart = indexOfBuffer(source, b, start);
+    if (partStart < 0) break;
+    const partEnd = indexOfBuffer(source, e, start);
+    if (partEnd >= 0 && partEnd < partStart) break; // end boundary
+
+    // Find next boundary or end
+    const nextBoundary = indexOfBuffer(source, b, partStart + b.length);
+    const endBoundary = indexOfBuffer(source, e, partStart + b.length);
+    let end = -1;
+    if (endBoundary >= 0 && (nextBoundary < 0 || endBoundary < nextBoundary)) {
+      end = endBoundary;
+    } else if (nextBoundary >= 0) {
+      end = nextBoundary;
+    } else {
+      end = source.length;
+    }
+
+    if (end < 0) break;
+
+    // Extract part content (skip the boundary line itself)
+    const partRaw = source.slice(partStart + b.length, end);
+    // Skip the \r\n after boundary
+    const partBodyStart = findHeaderEnd(partRaw);
+    if (partBodyStart >= 0) {
+      const result = findBodyPart(partRaw, null);
+      if (result.text) text += result.text + '\n';
+      if (result.isHtml) html += result.text + '\n';
+    }
+
+    start = end;
+    if (endBoundary >= 0 && endBoundary <= end) break; // hit end boundary
+  }
+
+  return { text: text || html, isHtml: !!html };
+}
+
+function indexOfBuffer(haystack, needle, fromIndex) {
+  for (let i = fromIndex || 0; i <= haystack.length - needle.length; i++) {
+    let match = true;
+    for (let j = 0; j < needle.length; j++) {
+      if (haystack[i + j] !== needle[j]) { match = false; break; }
+    }
+    if (match) return i;
+  }
+  return -1;
+}
+
+// Main function: extract email text from raw source
+function extractBodyFromSource(source) {
+  if (!source || !Buffer.isBuffer(source) || source.length === 0) return '';
+  const result = findBodyPart(source, null);
+  let text = result.text;
+  // Remove HTML tags if any remain
+  text = text.replace(/<[^>]+>/g, '');
+  text = text.replace(/\n{3,}/g, '\n\n');
+  return text.trim();
+}
+
+// Try bodyParts first, fallback to source parsing
 function getEmailText(bodyParts, source) {
-  // Try bodyParts first
-  if (bodyParts) {
-    if (bodyParts instanceof Map) {
-      // Try common body part keys
-      for (const key of ['TEXT', '1', '1.1', '2', '2.1']) {
-        if (bodyParts.has(key)) {
-          const buf = bodyParts.get(key);
-          if (buf && buf.length > 0) return buf.toString('utf8').trim();
+  if (bodyParts && bodyParts instanceof Map) {
+    for (const key of ['TEXT', '1', '1.1', '2', '2.1']) {
+      if (bodyParts.has(key)) {
+        const buf = bodyParts.get(key);
+        if (buf && buf.length > 0) {
+          // Try GBK first (common for QQ/Chinese emails), fallback to UTF-8
+          for (const cs of ['gbk', 'utf-8']) {
+            try {
+              if (iconv.encodingExists(cs)) {
+                const text = iconv.decode(buf, cs).trim();
+                if (text.length > 0) return text;
+              }
+            } catch(e) {}
+          }
+          return buf.toString('utf8').trim();
         }
       }
     }
   }
   // Fallback to parsing source
-  return parseBodyFromSource(source);
+  return extractBodyFromSource(source);
 }
 
 // ========================================
