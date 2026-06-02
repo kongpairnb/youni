@@ -1,604 +1,1290 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>灵感垃圾桶</title>
-  <style>
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-    }
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>邮你 · 极简邮箱工具</title>
+<style>
+:root {
+  --sidebar-w: 220px;
+  --detail-w: 420px;
+  --header-h: 48px;
+  --radius: 6px;
+  --font-heading: 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', system-ui, -apple-system, sans-serif;
+  --font-body: 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', system-ui, -apple-system, sans-serif;
+}
+[data-theme="dark"] {
+  --bg: #0b0b0e;
+  --bg-panel: #101014;
+  --bg-elevated: #18181c;
+  --bg-hover: #1f1f25;
+  --bg-active: #27272d;
+  --border: #1e1e24;
+  --border-light: #2a2a32;
+  --text: #ededef;
+  --text-secondary: #7f7f8c;
+  --text-tertiary: #555560;
+  --accent: #7cdece;
+  --accent-dim: rgba(124, 222, 206, 0.08);
+  --accent-glow: rgba(124, 222, 206, 0.04);
+  --orange: #f59e5f;
+  --red: #f87171;
+  --purple: #a78bfa;
+  --yellow: #facc15;
+  --blue: #60a5fa;
+}
+[data-theme="light"] {
+  --bg: #f5f5f7;
+  --bg-panel: #ffffff;
+  --bg-elevated: #eeeeF0;
+  --bg-hover: #e6e6ea;
+  --bg-active: #dcdce0;
+  --border: #dcdce2;
+  --border-light: #c8c8d0;
+  --text: #1a1a1e;
+  --text-secondary: #6b6b78;
+  --text-tertiary: #9c9ca8;
+  --accent: #0ea5a0;
+  --accent-dim: rgba(14, 165, 160, 0.08);
+  --accent-glow: rgba(14, 165, 160, 0.04);
+  --orange: #d97706;
+  --red: #dc2626;
+  --purple: #7c3aed;
+  --yellow: #ca8a04;
+  --blue: #2563eb;
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; background: var(--bg); color: var(--text); font-family: var(--font-body); font-size: 14px; line-height: 1.5; -webkit-font-smoothing: antialiased; overflow: hidden; }
+html { transition: background .3s ease; }
+body > * { transition: background .3s ease, border-color .3s ease, color .3s ease; }
+input, textarea, button, select { font: inherit; color: inherit; }
+input::placeholder, textarea::placeholder { color: var(--text-tertiary); }
+button { cursor: pointer; border: none; background: none; }
+a { color: var(--accent); text-decoration: none; }
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border-light); border-radius: 2px; }
 
-    :root {
-      --cream: #f7f4ee;
-      --cream-deep: #ede8df;
-      --paper: #faf8f4;
-      --paper-shadow: #e8e2d8;
-      --brown-light: #c4b5a4;
-      --brown: #a89582;
-      --brown-deep: #8f7d6c;
-      --brown-ink: #7a6b5c;
-      --text-soft: #6f655c;
-      --text-muted: #9a9086;
-    }
+/* ═══ Header ═══ */
+#header {
+  height: var(--header-h);
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg);
+  gap: 12px;
+  flex-shrink: 0;
+  z-index: 10;
+}
+#header .logo {
+  font-family: var(--font-heading);
+  font-weight: 600;
+  font-size: 15px;
+  letter-spacing: -0.02em;
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+#header .logo span { color: var(--accent); }
+#header .logo .badge {
+  font-size: 9px;
+  font-weight: 500;
+  background: var(--accent-dim);
+  color: var(--accent);
+  padding: 1px 6px;
+  border-radius: 3px;
+  letter-spacing: 0.04em;
+  margin-left: 4px;
+}
 
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", "PingFang SC", "Hiragino Sans GB", sans-serif;
-      background: var(--cream);
-      color: var(--text-soft);
-      min-height: 100vh;
-      overflow-x: hidden;
-    }
+/* ═══ Layout ═══ */
+#app {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  height: 100dvh;
+}
+#main {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
 
-    .app {
-      max-width: 420px;
-      margin: 0 auto;
-      padding: 2.5rem 1.25rem 3rem;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      min-height: 100vh;
-    }
+/* ═══ Sidebar ═══ */
+#sidebar {
+  width: var(--sidebar-w);
+  background: var(--bg-panel);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  overflow-y: auto;
+}
+.sidebar-section { padding: 14px 14px 10px; }
+.sidebar-section + .sidebar-section { border-top: 1px solid var(--border); }
+.sidebar-label {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-tertiary);
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.sidebar-label button {
+  font-size: 14px;
+  color: var(--text-tertiary);
+  width: 20px; height: 20px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 4px;
+  transition: all .15s;
+}
+.sidebar-label button:hover { background: var(--bg-hover); color: var(--text); }
+.account-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: all .15s;
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin-bottom: 2px;
+}
+.account-item:hover { background: var(--bg-hover); color: var(--text); }
+.account-item.active { background: var(--accent-dim); color: var(--accent); }
+.account-dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.account-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.account-remove {
+  font-size: 12px;
+  color: var(--text-tertiary);
+  opacity: 0;
+  transition: all .15s;
+  padding: 2px 4px;
+  border-radius: 3px;
+}
+.account-item:hover .account-remove { opacity: 1; }
+.account-remove:hover { color: var(--red); background: rgba(248,113,113,0.1); }
 
-    /* —— 手绘废纸篓 —— */
-    .bin-stage {
-      position: relative;
-      width: 100%;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      margin-bottom: 1.25rem;
-    }
+.keyword-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  margin: 0 4px 4px 0;
+  cursor: pointer;
+  transition: all .15s;
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
+  border: 1px solid transparent;
+}
+.keyword-tag:hover { border-color: var(--border-light); color: var(--text); }
+.keyword-tag.active { background: var(--accent-dim); color: var(--accent); border-color: rgba(124,222,206,0.2); }
+.keyword-tag .remove {
+  font-size: 10px;
+  margin-left: 2px;
+  opacity: 0.5;
+  padding: 1px;
+}
+.keyword-tag .remove:hover { opacity: 1; color: var(--red); }
+.keyword-add {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  transition: all .15s;
+  border: 1px dashed var(--border-light);
+}
+.keyword-add:hover { color: var(--text); border-color: var(--text-tertiary); }
 
-    .bin-hero {
-      position: relative;
-      width: 120px;
-      height: 118px;
-      flex-shrink: 0;
-      z-index: 2;
-    }
+/* ═══ Center Panel ═══ */
+#center {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  background: var(--bg);
+}
+#search-bar {
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-shrink: 0;
+}
+#search-bar input {
+  flex: 1;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 7px 12px;
+  font-size: 13px;
+  outline: none;
+  transition: border-color .2s;
+}
+#search-bar input:focus { border-color: var(--accent); }
+#search-bar .email-count {
+  font-size: 12px;
+  color: var(--text-tertiary);
+  white-space: nowrap;
+}
 
-    .bin-icon {
-      width: 100%;
-      height: 100%;
-      display: block;
-      filter: drop-shadow(0 6px 14px rgba(122, 107, 92, 0.12));
-    }
+#email-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 4px 0;
+}
+.email-row {
+  padding: 10px 16px;
+  cursor: pointer;
+  transition: all .12s;
+  border-left: 2px solid transparent;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.email-row:hover { background: var(--bg-elevated); }
+.email-row.active {
+  background: var(--accent-dim);
+  border-left-color: var(--accent);
+}
+.email-row-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.email-row .sender {
+  font-weight: 500;
+  font-size: 13px;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.email-row .date {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  white-space: nowrap;
+  margin-left: auto;
+}
+.email-row .subject {
+  font-size: 13px;
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.email-row .preview {
+  font-size: 12px;
+  color: var(--text-tertiary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.email-row .meta-line {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 2px;
+}
+.meta-chip {
+  font-size: 10px;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: var(--bg-hover);
+  color: var(--text-tertiary);
+}
+.meta-chip.keyword-highlight { background: var(--accent-dim); color: var(--accent); }
+.meta-chip.date-chip { background: rgba(245,158,95,0.1); color: var(--orange); }
+.meta-chip.calendar-chip { background: rgba(96,165,250,0.1); color: var(--blue); }
 
-    .bin-hero .bin-glow {
-      position: absolute;
-      bottom: 8px;
-      left: 50%;
-      transform: translateX(-50%);
-      width: 72px;
-      height: 10px;
-      background: radial-gradient(ellipse, rgba(168, 149, 130, 0.22) 0%, transparent 72%);
-      pointer-events: none;
-    }
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: var(--text-tertiary);
+  font-size: 13px;
+  gap: 8px;
+  padding: 40px;
+  text-align: center;
+}
+.empty-state .icon { font-size: 32px; opacity: 0.3; }
 
-  /* —— 揉皱白纸输入区 —— */
-    .input-zone {
-      width: 100%;
-      margin-top: 0.5rem;
-      margin-bottom: 1rem;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 0.85rem;
-    }
+/* ═══ Detail Panel ═══ */
+#detail {
+  width: var(--detail-w);
+  background: var(--bg-panel);
+  border-left: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  overflow-y: auto;
+}
+#detail.empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-tertiary);
+  font-size: 13px;
+}
+.detail-header {
+  padding: 16px 20px 12px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.detail-header .d-subject {
+  font-family: var(--font-heading);
+  font-weight: 600;
+  font-size: 16px;
+  letter-spacing: -0.01em;
+  color: var(--text);
+  margin-bottom: 8px;
+  line-height: 1.3;
+}
+.detail-header .d-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.detail-header .d-meta span { display: flex; gap: 6px; }
+.detail-header .d-meta .label { color: var(--text-tertiary); width: 44px; }
+.detail-body {
+  padding: 16px 20px;
+  font-size: 13.5px;
+  line-height: 1.7;
+  color: var(--text-secondary);
+  flex: 1;
+}
+.detail-body .highlight { color: var(--accent); background: var(--accent-dim); padding: 0 2px; border-radius: 2px; }
 
-    .paper-input-wrap {
-      position: relative;
-      width: 100%;
-    }
+/* ═══ Extraction Panel ═══ */
+#extraction {
+  border-top: 1px solid var(--border);
+  background: var(--bg-elevated);
+  flex-shrink: 0;
+}
+#extraction .extract-header {
+  padding: 10px 20px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  user-select: none;
+}
+#extraction .extract-header:hover { color: var(--text-secondary); }
+#extraction .extract-body {
+  padding: 0 20px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.extract-group {}
+.extract-group-label {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-tertiary);
+  margin-bottom: 4px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.extract-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px;
+  border-radius: 4px;
+  background: var(--bg-panel);
+  margin-bottom: 3px;
+  font-size: 12px;
+}
+.extract-item .ei-date { color: var(--orange); font-weight: 500; }
+.extract-item .ei-label { color: var(--text-secondary); flex: 1; }
+.extract-item .ei-action {
+  font-size: 11px;
+  color: var(--blue);
+  padding: 2px 6px;
+  border-radius: 3px;
+  cursor: pointer;
+  transition: all .15s;
+}
+.extract-item .ei-action:hover { background: rgba(96,165,250,0.1); }
+.extract-item .ei-action.done { color: var(--accent); }
+.extract-item .ei-keyword { color: var(--accent); }
 
-    .paper-input-wrap::before {
-      content: "";
-      position: absolute;
-      inset: -3px 4px 6px -4px;
-      background: var(--paper-shadow);
-      border-radius: 14px 18px 16px 12px;
-      transform: rotate(-1.2deg);
-      opacity: 0.55;
-      z-index: 0;
-    }
+/* ═══ Modal ═══ */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.6);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  backdrop-filter: blur(4px);
+  animation: fadeIn .2s ease;
+}
+.modal-overlay.open { display: flex; }
+.modal {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  width: 360px;
+  max-width: 90vw;
+  padding: 24px;
+  animation: slideUp .2s ease;
+}
+.modal h3 {
+  font-family: var(--font-heading);
+  font-weight: 600;
+  font-size: 16px;
+  margin-bottom: 16px;
+  letter-spacing: -0.01em;
+}
+.modal label {
+  display: block;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  margin-bottom: 4px;
+  margin-top: 12px;
+}
+.modal label:first-of-type { margin-top: 0; }
+.modal input, .modal select {
+  width: 100%;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 8px 12px;
+  font-size: 13px;
+  outline: none;
+  transition: border-color .2s;
+}
+.modal input:focus, .modal select:focus { border-color: var(--accent); }
+.modal-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 20px;
+}
+.modal-actions button {
+  padding: 7px 16px;
+  border-radius: var(--radius);
+  font-size: 13px;
+  font-weight: 500;
+  transition: all .15s;
+}
+.modal-actions .btn-secondary { background: var(--bg-hover); color: var(--text-secondary); }
+.modal-actions .btn-secondary:hover { background: var(--bg-active); color: var(--text); }
+.modal-actions .btn-primary { background: var(--accent); color: #0b0b0e; }
+.modal-actions .btn-primary:hover { opacity: 0.9; }
 
-    #entry {
-      position: relative;
-      z-index: 1;
-      width: 100%;
-      min-height: 88px;
-      padding: 1rem 1.1rem;
-      font-size: 0.95rem;
-      line-height: 1.55;
-      font-family: inherit;
-      color: var(--brown-ink);
-      resize: none;
-      border: none;
-      border-radius: 12px 16px 14px 11px;
-      transform: rotate(0.35deg);
-      background:
-        radial-gradient(ellipse 80% 50% at 18% 12%, rgba(255, 255, 255, 0.9) 0%, transparent 55%),
-        radial-gradient(ellipse 60% 40% at 88% 78%, rgba(200, 190, 175, 0.15) 0%, transparent 50%),
-        radial-gradient(ellipse 40% 30% at 72% 22%, rgba(180, 170, 155, 0.08) 0%, transparent 45%),
-        linear-gradient(168deg, #fdfbf8 0%, #f3efe8 42%, #ebe5dc 100%);
-      box-shadow:
-        inset 0 1px 0 rgba(255, 255, 255, 0.85),
-        inset 2px 3px 8px rgba(180, 168, 150, 0.12),
-        inset -1px -2px 6px rgba(160, 148, 132, 0.08),
-        0 2px 8px rgba(122, 107, 92, 0.08);
-      outline: none;
-    }
+/* ═══ Calendar Panel (mini) ═══ */
+#calendar-panel {
+  border-top: 1px solid var(--border);
+  padding: 12px 20px;
+  flex-shrink: 0;
+}
+#calendar-panel .cal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+#calendar-panel .cal-header .cal-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+}
+#calendar-panel .cal-header button {
+  font-size: 14px;
+  color: var(--text-tertiary);
+  width: 22px; height: 22px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 4px;
+  transition: all .15s;
+}
+#calendar-panel .cal-header button:hover { background: var(--bg-hover); color: var(--text); }
+.cal-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+  text-align: center;
+}
+.cal-grid .cal-weekday {
+  font-size: 10px;
+  color: var(--text-tertiary);
+  padding: 4px 0;
+  font-weight: 500;
+}
+.cal-grid .cal-day {
+  font-size: 12px;
+  padding: 4px 0;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all .12s;
+  color: var(--text-secondary);
+  position: relative;
+}
+.cal-grid .cal-day:hover { background: var(--bg-hover); }
+.cal-grid .cal-day.other-month { color: var(--text-tertiary); opacity: 0.3; }
+.cal-grid .cal-day.today { color: var(--accent); font-weight: 600; }
+.cal-grid .cal-day.has-event::after {
+  content: '';
+  position: absolute;
+  bottom: 2px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--accent);
+}
 
-    #entry::placeholder {
-      color: var(--text-muted);
-      opacity: 0.85;
-    }
+/* ═══ Animations ═══ */
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes slideUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 
-    #entry:focus {
-      box-shadow:
-        inset 0 1px 0 rgba(255, 255, 255, 0.9),
-        inset 2px 3px 10px rgba(180, 168, 150, 0.14),
-        0 0 0 2px rgba(196, 181, 164, 0.35),
-        0 3px 12px rgba(122, 107, 92, 0.1);
-    }
-
-    #save-btn {
-      font-family: inherit;
-      font-size: 0.82rem;
-      font-weight: 500;
-      letter-spacing: 0.18em;
-      padding: 0.5rem 1.6rem;
-      color: #faf7f2;
-      background: linear-gradient(180deg, var(--brown-light) 0%, var(--brown) 100%);
-      border: none;
-      border-radius: 999px;
-      cursor: pointer;
-      box-shadow: 0 2px 8px rgba(122, 107, 92, 0.18);
-      transition: transform 0.2s ease, box-shadow 0.2s ease;
-    }
-
-    #save-btn:hover {
-      background: linear-gradient(180deg, #cbbbae 0%, var(--brown-deep) 100%);
-    }
-
-    #save-btn:active {
-      transform: scale(0.98);
-    }
-
-    #save-btn:disabled {
-      opacity: 0.55;
-      cursor: wait;
-    }
-
-    /* —— 纸团堆叠区（桶口下方） —— */
-    .bin-scene {
-      position: relative;
-      width: 100%;
-      min-height: 200px;
-      margin-top: -36px;
-      z-index: 1;
-    }
-
-    .pile-stats {
-      text-align: center;
-      font-size: 0.72rem;
-      color: var(--text-muted);
-      letter-spacing: 0.04em;
-      margin-bottom: 0.35rem;
-      pointer-events: none;
-    }
-
-    .pile-stats strong {
-      color: var(--brown);
-      font-weight: 500;
-    }
-
-    .pile-area {
-      position: relative;
-      left: auto;
-      margin: 0 auto;
-      width: 280px;
-      height: 188px;
-      pointer-events: none;
-    }
-
-    .pile-area .ball {
-      pointer-events: auto;
-    }
-
-    /* 纸团 */
-    .ball {
-      position: absolute;
-      width: 52px;
-      height: 48px;
-      padding: 0;
-      border: none;
-      cursor: pointer;
-      background: transparent;
-      transform-origin: center bottom;
-      transition: transform 0.25s ease, filter 0.25s ease;
-      -webkit-tap-highlight-color: transparent;
-    }
-
-    .ball:focus-visible {
-      outline: 2px solid var(--brown-light);
-      outline-offset: 3px;
-      border-radius: 50%;
-    }
-
-    .ball:hover {
-      transform: translate(var(--tx, 0), var(--ty, 0)) rotate(var(--rot, 0deg)) scale(1.06) !important;
-      z-index: 50 !important;
-      filter: drop-shadow(0 4px 10px rgba(122, 107, 92, 0.2));
-    }
-
-    .ball-inner {
-      width: 100%;
-      height: 100%;
-      border-radius: 42% 38% 44% 40% / 44% 40% 42% 38%;
-      background:
-        radial-gradient(circle at 32% 28%, #fffefb 0%, transparent 42%),
-        radial-gradient(circle at 70% 65%, rgba(210, 200, 185, 0.35) 0%, transparent 48%),
-        linear-gradient(145deg, #f8f5f0 0%, #e8e2d8 55%, #ddd6cc 100%);
-      box-shadow:
-        inset -2px -3px 6px rgba(160, 148, 132, 0.2),
-        inset 1px 1px 3px rgba(255, 255, 255, 0.7),
-        0 2px 6px rgba(122, 107, 92, 0.14);
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      padding: 4px;
-    }
-
-    .ball time {
-      font-size: 0.5rem;
-      color: var(--text-muted);
-      line-height: 1.2;
-      text-align: center;
-      pointer-events: none;
-      white-space: nowrap;
-    }
-
-    .ball .ball-hint {
-      font-size: 0.45rem;
-      color: var(--brown-light);
-      opacity: 0;
-      margin-top: 1px;
-      transition: opacity 0.2s;
-    }
-
-    .ball:hover .ball-hint {
-      opacity: 1;
-    }
-
-    /* 掉落动画 */
-    .ball.falling {
-      pointer-events: none;
-      z-index: 100 !important;
-      animation: drop-in 0.72s cubic-bezier(0.34, 1.15, 0.48, 1) forwards;
-    }
-
-    @keyframes drop-in {
-      0% {
-        opacity: 0.3;
-        transform: translate(0, -120px) rotate(-8deg) scale(0.5);
-      }
-      55% {
-        opacity: 1;
-        transform: translate(var(--tx, 0), calc(var(--ty, 0) - 18px)) rotate(calc(var(--rot, 0deg) + 6deg)) scale(1.05);
-      }
-      78% {
-        transform: translate(var(--tx, 0), calc(var(--ty, 0) + 6px)) rotate(calc(var(--rot, 0deg) - 3deg)) scale(0.96);
-      }
-      100% {
-        opacity: 1;
-        transform: translate(var(--tx, 0), var(--ty, 0)) rotate(var(--rot, 0deg)) scale(1);
-      }
-    }
-
-    /* 飞行中的大号纸团（从输入区飞出） */
-    .fly-ball {
-      position: fixed;
-      z-index: 200;
-      width: 40px;
-      height: 38px;
-      border-radius: 42% 38% 44% 40%;
-      background: linear-gradient(145deg, #faf8f4, #e5dfd6);
-      box-shadow: 0 4px 12px rgba(122, 107, 92, 0.2);
-      pointer-events: none;
-      opacity: 0;
-    }
-
-    .fly-ball.active {
-      animation: fly-to-bin 0.55s cubic-bezier(0.45, 0, 0.2, 1) forwards;
-    }
-
-    @keyframes fly-to-bin {
-      0% {
-        opacity: 1;
-        transform: translate(0, 0) scale(1) rotate(0deg);
-      }
-      100% {
-        opacity: 0.9;
-        transform: translate(var(--fly-x), var(--fly-y)) scale(0.65) rotate(180deg);
-      }
-    }
-
-    .empty-hint {
-      position: absolute;
-      left: 50%;
-      top: 42%;
-      transform: translate(-50%, -50%);
-      font-size: 0.78rem;
-      color: var(--text-muted);
-      opacity: 0.45;
-      text-align: center;
-      line-height: 1.6;
-      pointer-events: none;
-      transition: opacity 0.3s;
-    }
-
-    .empty-hint.hidden {
-      opacity: 0;
-    }
-
-    @media (max-width: 380px) {
-      .pile-area {
-        width: 100%;
-        max-width: 260px;
-      }
-    }
-
-    @media (prefers-reduced-motion: reduce) {
-      .ball.falling,
-      .fly-ball.active {
-        animation: none;
-      }
-    }
-  </style>
+/* ═══ Responsive ═══ */
+@media (max-width: 900px) {
+  #detail { display: none; }
+  #detail.open { display: flex; position: fixed; inset: 0; z-index: 50; width: 100%; border-left: none; }
+}
+</style>
 </head>
 <body>
-  <div class="app">
-    <div class="bin-stage">
-    <div class="bin-hero" aria-hidden="true">
-      <svg class="bin-icon" viewBox="0 0 120 130" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="废纸篓">
-        <!-- 手绘感：略抖的线条、浅棕描边 -->
-        <path d="M28 42 Q30 38 36 38 L84 38 Q90 38 92 42" stroke="#b5a594" stroke-width="2.2" stroke-linecap="round" fill="none"/>
-        <path d="M32 42 L30 98 Q29 108 38 108 L82 108 Q91 108 90 98 L88 42" stroke="#a89582" stroke-width="2" stroke-linejoin="round" fill="rgba(196,181,164,0.12)"/>
-        <path d="M38 52 L42 100 M52 50 L54 102 M62 50 L62 103 M72 50 L70 101 M82 52 L78 99" stroke="#c4b5a4" stroke-width="1" stroke-linecap="round" opacity="0.65"/>
-        <ellipse cx="60" cy="108" rx="28" ry="4" fill="rgba(168,149,130,0.15)"/>
-        <path d="M24 44 Q22 46 24 48 L28 50" stroke="#b5a594" stroke-width="1.5" stroke-linecap="round" fill="none" opacity="0.5"/>
-        <path d="M96 44 Q98 46 96 48 L92 50" stroke="#b5a594" stroke-width="1.5" stroke-linecap="round" fill="none" opacity="0.5"/>
-      </svg>
-      <div class="bin-glow"></div>
-    </div>
 
-    <section class="bin-scene" aria-label="纸团记录">
-      <p class="pile-stats" id="stats"></p>
-      <p class="empty-hint" id="empty-hint">还没有纸团<br />写点什么，点记录</p>
-      <div class="pile-area" id="pile"></div>
-    </section>
+<div id="app">
+  <header id="header">
+    <div class="logo">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M22 7l-10 7L2 7"/></svg>
+      邮<span>你</span>
+      <span class="badge">BETA</span>
     </div>
+    <div style="flex:1"></div>
+    <div style="display:flex;align-items:center;gap:6px;">
+      <button onclick="showComposeModal()" style="font-size:12px;color:var(--text-secondary);padding:4px 10px;border-radius:4px;background:var(--bg-elevated);transition:all.15s;font-weight:500;border:1px solid var(--border);" onmouseover="this.style.borderColor='var(--text-tertiary)'" onmouseout="this.style.borderColor='var(--border)'">✎ 写邮件</button>
+      <button onclick="showAccountModal()" style="font-size:12px;color:var(--accent);padding:4px 10px;border-radius:4px;background:var(--accent-dim);transition:all.15s;font-weight:500;" onmouseover="this.style.background='rgba(124,222,206,0.15)'" onmouseout="this.style.background='var(--accent-dim)'">+ 绑定邮箱</button>
+      <button id="theme-toggle" onclick="toggleTheme()" style="font-size:14px;color:var(--text-secondary);padding:4px 6px;border-radius:4px;transition:all.15s;" onmouseover="this.style.background='var(--bg-hover)'" onmouseout="this.style.background='transparent'" title="切换主题">🌙</button>
+    </div>
+  </header>
 
-    <div class="input-zone">
-      <div class="paper-input-wrap">
-        <textarea
-          id="entry"
-          rows="3"
-          placeholder="把你的抱怨和灵感丢进来..."
-          autocomplete="off"
-        ></textarea>
+  <div id="main">
+    <!-- Sidebar -->
+    <aside id="sidebar">
+      <div class="sidebar-section">
+        <div class="sidebar-label">邮箱账号</div>
+        <div id="account-list"></div>
       </div>
-      <button type="button" id="save-btn">记录</button>
+      <div class="sidebar-section">
+        <div class="sidebar-label">
+          关键词筛选
+          <button onclick="showKeywordModal()" title="添加关键词">+</button>
+        </div>
+        <div id="keyword-list"></div>
+      </div>
+      <div class="sidebar-section" style="flex:1;min-height:0;">
+        <div class="sidebar-label">快捷操作</div>
+        <div style="display:flex;flex-direction:column;gap:2px;">
+          <div class="account-item" onclick="setFilter('all')" data-filter="all" style="font-size:12px;">📬 全部邮件</div>
+          <div class="account-item" onclick="setFilter('today')" data-filter="today" style="font-size:12px;">📌 今日邮件</div>
+          <div class="account-item" onclick="setFilter('flagged')" data-filter="flagged" style="font-size:12px;">🏷️ 已标记提醒</div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Center -->
+    <section id="center">
+      <div id="search-bar">
+        <input type="text" id="search-input" placeholder="搜索邮件内容、发件人..." oninput="onSearch()">
+        <span class="email-count" id="email-count">0 封邮件</span>
+      </div>
+      <div id="email-list"></div>
+    </section>
+
+    <!-- Detail -->
+    <aside id="detail" class="empty">
+      <div>选择一封邮件查看详情</div>
+    </aside>
+  </div>
+</div>
+
+<!-- Add Account Modal -->
+<div class="modal-overlay" id="account-modal">
+  <div class="modal">
+    <h3>绑定邮箱</h3>
+    <label>邮箱地址</label>
+    <input type="email" id="new-account-email" placeholder="your@business.com">
+    <label>显示名称</label>
+    <input type="text" id="new-account-name" placeholder="工作邮箱">
+    <label>颜色标识</label>
+    <div style="display:flex;gap:6px;margin-top:4px;" id="color-picker">
+      <div class="color-opt" data-color="#7cdece" style="width:24px;height:24px;border-radius:50%;background:#7cdece;cursor:pointer;border:2px solid transparent;transition:all.12s;" onclick="selectColor(this)"></div>
+      <div class="color-opt" data-color="#f59e5f" style="width:24px;height:24px;border-radius:50%;background:#f59e5f;cursor:pointer;border:2px solid transparent;transition:all.12s;" onclick="selectColor(this)"></div>
+      <div class="color-opt" data-color="#a78bfa" style="width:24px;height:24px;border-radius:50%;background:#a78bfa;cursor:pointer;border:2px solid transparent;transition:all.12s;" onclick="selectColor(this)"></div>
+      <div class="color-opt" data-color="#60a5fa" style="width:24px;height:24px;border-radius:50%;background:#60a5fa;cursor:pointer;border:2px solid transparent;transition:all.12s;" onclick="selectColor(this)"></div>
+      <div class="color-opt" data-color="#f87171" style="width:24px;height:24px;border-radius:50%;background:#f87171;cursor:pointer;border:2px solid transparent;transition:all.12s;" onclick="selectColor(this)"></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-secondary" onclick="closeModal('account-modal')">取消</button>
+      <button class="btn-primary" onclick="addAccount()">绑定</button>
     </div>
   </div>
+</div>
 
-  <script>
-    const STORAGE_KEY = "inspiration-bin-entries";
-    const entry = document.getElementById("entry");
-    const saveBtn = document.getElementById("save-btn");
-    const pile = document.getElementById("pile");
-    const stats = document.getElementById("stats");
-    const emptyHint = document.getElementById("empty-hint");
+<!-- Add Keyword Modal -->
+<div class="modal-overlay" id="keyword-modal">
+  <div class="modal">
+    <h3>添加关键词</h3>
+    <label>关键词</label>
+    <input type="text" id="new-keyword" placeholder="例如：invoice、报告、合同" onkeydown="if(event.key==='Enter')addKeyword()">
+    <div class="modal-actions">
+      <button class="btn-secondary" onclick="closeModal('keyword-modal')">取消</button>
+      <button class="btn-primary" onclick="addKeyword()">添加</button>
+    </div>
+  </div>
+</div>
 
-    /* 固定错落布局：新记录用下一个槽位，整体像堆在桶里 */
-    const SLOTS = [
-      { x: 108, y: 72, r: -14 },
-      { x: 72, y: 88, r: 8 },
-      { x: 148, y: 84, r: 22 },
-      { x: 42, y: 68, r: -6 },
-      { x: 178, y: 76, r: 12 },
-      { x: 92, y: 58, r: -18 },
-      { x: 132, y: 62, r: 5 },
-      { x: 58, y: 98, r: 16 },
-      { x: 162, y: 94, r: -10 },
-      { x: 24, y: 82, r: 20 },
-      { x: 198, y: 78, r: -8 },
-      { x: 118, y: 48, r: 6 },
-      { x: 78, y: 44, r: -12 },
-      { x: 155, y: 52, r: 15 },
-    ];
+<!-- Reminder Modal -->
+<div class="modal-overlay" id="reminder-modal">
+  <div class="modal">
+    <h3>设置日历提醒</h3>
+    <label>标题</label>
+    <input type="text" id="reminder-title" placeholder="事件标题">
+    <label>日期</label>
+    <input type="date" id="reminder-date">
+    <label>备注</label>
+    <input type="text" id="reminder-note" placeholder="可选备注">
+    <div class="modal-actions">
+      <button class="btn-secondary" onclick="closeModal('reminder-modal')">取消</button>
+      <button class="btn-primary" onclick="saveReminder()">添加到日历</button>
+    </div>
+  </div>
+</div>
 
-    function load() {
-      try {
-        const raw = localStorage.getItem(STORAGE_KEY);
-        return raw ? JSON.parse(raw) : [];
-      } catch {
-        return [];
-      }
+<!-- Compose Modal -->
+<div class="modal-overlay" id="compose-modal">
+  <div class="modal" style="width:480px;">
+    <h3>写邮件</h3>
+    <label>收件人</label>
+    <input type="email" id="compose-to" placeholder="recipient@example.com">
+    <label>主题</label>
+    <input type="text" id="compose-subject" placeholder="邮件主题">
+    <label id="compose-body-label">正文 <span style="font-weight:400;color:var(--text-tertiary);">（输入后自动提取关键词与日期）</span></label>
+    <textarea id="compose-body" rows="6" style="width:100%;background:var(--bg-elevated);border:1px solid var(--border);border-radius:var(--radius);padding:8px 12px;font-size:13px;outline:none;resize:vertical;transition:border-color .2s;" onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'" oninput="onComposeInput()" placeholder="在此输入邮件正文...&#10;例如：合同编号 CT-2026-0888 将于 2026年8月1日 到期"></textarea>
+    <div id="compose-extract" style="margin-top:12px;padding:10px 12px;background:var(--bg-elevated);border-radius:var(--radius);display:none;flex-direction:column;gap:6px;">
+      <div id="compose-extract-keywords" style="font-size:12px;color:var(--accent);display:flex;flex-wrap:wrap;gap:4px;"></div>
+      <div id="compose-extract-dates" style="font-size:12px;color:var(--orange);display:flex;flex-wrap:wrap;gap:4px;"></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-secondary" onclick="closeModal('compose-modal')">取消</button>
+      <button class="btn-primary" onclick="sendCompose()" id="compose-send-btn">发送</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════
+// State
+// ═══════════════════════════════════════════
+let selectedColor = '#7cdece';
+let accounts = [];
+let keywords = [];
+let emails = [];
+let reminders = [];
+let activeEmailId = null;
+let currentFilter = 'all';
+let currentTheme = 'dark';
+let calendaryYear, calendaryMonth;
+
+function loadState() {
+  try {
+    const saved = localStorage.getItem('youni_state');
+    if (saved) {
+      const data = JSON.parse(saved);
+      accounts = data.accounts || [];
+      keywords = data.keywords || [];
+      emails = data.emails || [];
+      reminders = data.reminders || [];
+      currentTheme = data.theme || 'dark';
     }
+  } catch(e) {}
+  if (emails.length === 0) initMockData();
+  applyTheme(currentTheme);
+  const now = new Date();
+  calendaryYear = now.getFullYear();
+  calendaryMonth = now.getMonth();
+}
 
-    function save(items) {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
-    }
+function saveState() {
+  localStorage.setItem('youni_state', JSON.stringify({ accounts, keywords, emails, reminders, theme: currentTheme }));
+}
 
-    function formatTime(ts) {
-      const d = new Date(ts);
-      const m = String(d.getMonth() + 1).padStart(2, "0");
-      const day = String(d.getDate()).padStart(2, "0");
-      const h = String(d.getHours()).padStart(2, "0");
-      const min = String(d.getMinutes()).padStart(2, "0");
-      return `${m}/${day} ${h}:${min}`;
-    }
+function applyTheme(theme) {
+  currentTheme = theme;
+  document.documentElement.setAttribute('data-theme', theme);
+  const btn = document.getElementById('theme-toggle');
+  if (btn) btn.textContent = theme === 'dark' ? '🌙' : '☀️';
+}
 
-    function slotForIndex(displayIndex) {
-      const s = SLOTS[displayIndex % SLOTS.length];
-      const layer = Math.floor(displayIndex / SLOTS.length);
-      const jitter = layer * 3;
-      return {
-        x: s.x + (displayIndex % 3) * 2 - jitter,
-        y: s.y - layer * 6 + (displayIndex % 2),
-        r: s.r + (displayIndex % 5) - 2,
-      };
-    }
+function toggleTheme() {
+  applyTheme(currentTheme === 'dark' ? 'light' : 'dark');
+  saveState();
+}
 
-    function previewText(text) {
-      const t = text.replace(/\s+/g, " ").trim();
-      return t.length > 36 ? `${t.slice(0, 36)}…` : t;
-    }
+// ═══════════════════════════════════════════
+// Mock Data
+// ═══════════════════════════════════════════
+function initMockData() {
+  accounts = [
+    { id: 'a1', email: 'alex@company.com', name: 'Alex 工作', color: '#7cdece' },
+    { id: 'a2', email: 'hello@business.cn', name: '业务邮箱', color: '#f59e5f' }
+  ];
+  keywords = [
+    { id: 'k1', word: 'invoice' },
+    { id: 'k2', word: '报告' },
+    { id: 'k3', word: 'meeting' },
+    { id: 'k4', word: '合同' },
+    { id: 'k5', word: 'deadline' }
+  ];
+  const daysAgo = n => { const d = new Date(); d.setDate(d.getDate() - n); return d.toISOString(); };
+  emails = [
+    { id: 'e1', accountId: 'a1', from: 'finance@company.com', to: 'alex@company.com', subject: 'Invoice #INV-2026-0891 — Due June 15', body: 'Hi Alex,\n\nThis is a reminder that invoice #INV-2026-0891 for $12,500 is due on June 15, 2026. Please arrange payment before the deadline.\n\nBest,\nFinance Team', date: daysAgo(0), read: false },
+    { id: 'e2', accountId: 'a1', from: 'hr@company.com', to: 'alex@company.com', subject: 'Quarterly Review Meeting — June 20', body: 'Hello everyone,\n\nThe quarterly review meeting has been scheduled for June 20, 2026 at 2:00 PM in Conference Room A. Please prepare your department reports in advance.\n\nAgenda:\n- Q2 performance review\n- Budget planning\n- Team updates\n\nRegards,\nHR Department', date: daysAgo(0), read: false },
+    { id: 'e3', accountId: 'a2', from: 'vendor@supplier.cn', to: 'hello@business.cn', subject: '合同续约提醒 — 编号 CT-2026-0422', body: '尊敬的合作伙伴，\n\n贵司与我方签订的合同编号 CT-2026-0422 将于 2026年7月1日 到期。如需续约，请在到期前 15 个工作日内完成续签流程。\n\n如有任何疑问，请随时联系。\n\n此致\n供应商管理部', date: daysAgo(1), read: false },
+    { id: 'e4', accountId: 'a2', from: 'operations@business.cn', to: 'hello@business.cn', subject: '月度销售报告提交截止通知', body: '各位同事，\n\n请知悉本月销售报告提交截止日期为 2026年6月30日。请各部门在截止日前将销售数据汇总至运营部。\n\n上月报告显示销售额增长 15%，利润增长明显。请在本月报告中附上详细分析。\n\n谢谢配合\n运营部', date: daysAgo(1), read: false },
+    { id: 'e5', accountId: 'a1', from: 'client@partner.com', to: 'alex@company.com', subject: 'Project Milestone Payment Confirmed', body: 'Hi Alex,\n\nPayment of $12,500 for the Q2 project milestone has been confirmed. The funds should appear in your account within 3-5 business days.\n\nNext milestone deadline: July 15, 2026.\n\nPlease send the updated project report by next Friday.\n\nThanks,\nJane', date: daysAgo(2), read: false },
+    { id: 'e6', accountId: 'a2', from: 'notify@tax.cn', to: 'hello@business.cn', subject: '税务申报提醒 — 二季度申报截止', body: '尊敬的纳税人，\n\n2026年第二季度企业所得税申报截止日为 2026年7月15日。请确保在截止日前完成申报。\n\n所需材料：\n- 季度财务报表\n- 增值税发票汇总\n- 员工工资明细\n\n国家税务总局', date: daysAgo(3), read: false },
+    { id: 'e7', accountId: 'a1', from: 'team-lead@company.com', to: 'alex@company.com', subject: 'Team Building Event — June 25-26', body: 'Hi team,\n\nOur annual team building event is scheduled for June 25-26, 2026. Please RSVP by June 10.\n\nLocation: Green Valley Resort\nActivities schedule will be sent closer to the date.\n\nBest,\nTeam Lead', date: daysAgo(4), read: false },
+    { id: 'e8', accountId: 'a1', from: 'alerts@company.com', to: 'alex@company.com', subject: 'Security Alert: New Login Detected', body: 'Hi Alex,\n\nA new login to your account was detected on May 28, 2026 from IP 203.0.113.42. If this was you, no action needed. If not, please change your password immediately.\n\nSecurity Team', date: daysAgo(5), read: false }
+  ];
+  reminders = [
+    { id: 'r1', emailId: 'e1', date: '2026-06-15', title: 'Invoice #INV-2026-0891 Due', note: 'Payment of $12,500 due', createdAt: daysAgo(0) },
+    { id: 'r2', emailId: 'e2', date: '2026-06-20', title: 'Quarterly Review Meeting', note: 'Conference Room A, 2:00 PM', createdAt: daysAgo(0) }
+  ];
+  saveState();
+}
 
-    function createBallEl(item, displayIndex, { animate } = {}) {
-      const { text, ts } = item;
-      const slot = slotForIndex(displayIndex);
-      const btn = document.createElement("button");
-      btn.type = "button";
-      btn.className = "ball" + (animate ? " falling" : "");
-      btn.style.setProperty("--tx", `${slot.x}px`);
-      btn.style.setProperty("--ty", `${slot.y}px`);
-      btn.style.setProperty("--rot", `${slot.r}deg`);
-      btn.style.left = "0";
-      btn.style.top = "0";
-      btn.style.transform = animate
-        ? undefined
-        : `translate(${slot.x}px, ${slot.y}px) rotate(${slot.r}deg)`;
-      btn.style.zIndex = String(10 + displayIndex);
-      btn.dataset.index = String(item._storageIndex);
-      btn.title = `${previewText(text)}\n${formatTime(ts)} · 点击删除`;
-      btn.setAttribute("aria-label", `${previewText(text)}，${formatTime(ts)}，点击删除`);
+// ═══════════════════════════════════════════
+// Render Functions
+// ═══════════════════════════════════════════
+function renderAccounts() {
+  const el = document.getElementById('account-list');
+  el.innerHTML = accounts.map(a => `
+    <div class="account-item${accounts.indexOf(a) === 0 ? ' active' : ''}" onclick="selectAccount('${a.id}')">
+      <span class="account-dot" style="background:${a.color}"></span>
+      <span class="account-name">${esc(a.name)}</span>
+      <button class="account-remove" onclick="event.stopPropagation();removeAccount('${a.id}')">✕</button>
+    </div>
+  `).join('');
+}
 
-      const inner = document.createElement("span");
-      inner.className = "ball-inner";
-      const timeEl = document.createElement("time");
-      timeEl.dateTime = new Date(ts).toISOString();
-      timeEl.textContent = formatTime(ts);
-      const hint = document.createElement("span");
-      hint.className = "ball-hint";
-      hint.textContent = "删掉";
-      inner.appendChild(timeEl);
-      inner.appendChild(hint);
-      btn.appendChild(inner);
+function renderKeywords() {
+  const el = document.getElementById('keyword-list');
+  const activeKw = currentFilter !== 'all' && currentFilter !== 'today' && currentFilter !== 'flagged' ? currentFilter : '';
+  el.innerHTML = keywords.map(k => `
+    <span class="keyword-tag${activeKw === k.word ? ' active' : ''}" onclick="toggleKeyword('${k.word}')">
+      ${esc(k.word)}
+      <span class="remove" onclick="event.stopPropagation();removeKeyword('${k.id}')">✕</span>
+    </span>
+  `).join('') + `<span class="keyword-add" onclick="showKeywordModal()">+ 添加</span>`;
+}
 
-      btn.addEventListener("animationend", () => {
-        btn.classList.remove("falling");
-        btn.style.transform = `translate(${slot.x}px, ${slot.y}px) rotate(${slot.r}deg)`;
-      });
+function renderEmailList() {
+  const el = document.getElementById('email-list');
+  const filtered = getFilteredEmails();
+  document.getElementById('email-count').textContent = `${filtered.length} 封邮件`;
+  if (filtered.length === 0) {
+    el.innerHTML = `<div class="empty-state"><div class="icon">📭</div><div>没有匹配的邮件</div></div>`;
+    return;
+  }
+  el.innerHTML = filtered.map(e => {
+    const acct = accounts.find(a => a.id === e.accountId);
+    const matchKw = keywords.filter(k => e.body.toLowerCase().includes(k.word.toLowerCase()) || e.subject.toLowerCase().includes(k.word.toLowerCase()));
+    const dates = extractDates(e.body + ' ' + e.subject);
+    return `
+    <div class="email-row${activeEmailId === e.id ? ' active' : ''}" onclick="selectEmail('${e.id}')">
+      <div class="email-row-top">
+        <span class="sender" style="${acct ? 'color:'+acct.color : ''}">${esc(e.from)}</span>
+        <span class="date">${formatDate(e.date)}</span>
+      </div>
+      <div class="subject">${esc(e.subject)}</div>
+      <div class="preview">${esc(e.body.slice(0, 80))}${e.body.length > 80 ? '…' : ''}</div>
+      <div class="meta-line">
+        ${matchKw.slice(0, 3).map(k => `<span class="meta-chip keyword-highlight">${esc(k.word)}</span>`).join('')}
+        ${dates.slice(0, 2).map(d => `<span class="meta-chip date-chip">${esc(d)}</span>`).join('')}
+        ${reminders.filter(r => r.emailId === e.id).length > 0 ? '<span class="meta-chip calendar-chip">📅 已提醒</span>' : ''}
+      </div>
+    </div>`;
+  }).join('');
+}
 
-      btn.addEventListener("click", () => {
-        const idx = Number(btn.dataset.index);
-        const next = load();
-        if (idx < 0 || idx >= next.length) return;
-        next.splice(idx, 1);
-        save(next);
-        render();
-      });
+function renderDetail() {
+  const el = document.getElementById('detail');
+  if (!activeEmailId) {
+    el.className = 'empty';
+    el.innerHTML = '<div>选择一封邮件查看详情</div>';
+    return;
+  }
+  const email = emails.find(e => e.id === activeEmailId);
+  if (!email) { el.className = 'empty'; el.innerHTML = '<div>邮件不存在</div>'; return; }
+  el.className = '';
+  const acct = accounts.find(a => a.id === email.accountId);
+  const dates = extractDates(email.body + ' ' + email.subject);
+  const matchKw = keywords.filter(k => email.body.toLowerCase().includes(k.word.toLowerCase()) || email.subject.toLowerCase().includes(k.word.toLowerCase()));
+  const emailReminders = reminders.filter(r => r.emailId === email.id);
 
-      return btn;
-    }
+  let highlightedBody = esc(email.body);
+  matchKw.forEach(k => {
+    const re = new RegExp('(' + escapeRegex(k.word) + ')', 'gi');
+    highlightedBody = highlightedBody.replace(re, '<span class="highlight">$1</span>');
+  });
 
-    function updateStats(n) {
-      if (n === 0) {
-        stats.textContent = "";
-      } else {
-        stats.innerHTML = `桶里 <strong>${n}</strong> 团`;
-      }
-      emptyHint.classList.toggle("hidden", n > 0);
-    }
+  el.innerHTML = `
+    <div class="detail-header">
+      <div class="d-subject">${esc(email.subject)}</div>
+      <div class="d-meta">
+        <span><span class="label">发件人</span>${esc(email.from)}</span>
+        <span><span class="label">收件人</span>${esc(email.to)}</span>
+        <span><span class="label">时间</span>${formatDate(email.date, true)}</span>
+        <span><span class="label">账号</span><span style="color:${acct ? acct.color : 'var(--text-secondary)'}">${acct ? esc(acct.name) : '—'}</span></span>
+      </div>
+    </div>
+    <div class="detail-body">${highlightedBody.replace(/\n/g, '<br>')}</div>
+    <div id="extraction">
+      <div class="extract-header" onclick="toggleExtract()">
+        <span>📋 智能提取</span>
+        <span id="extract-arrow">▾</span>
+      </div>
+      <div class="extract-body" id="extract-body">
+        ${matchKw.length > 0 ? `
+        <div class="extract-group">
+          <div class="extract-group-label">🔑 关键词匹配</div>
+          ${matchKw.map(k => `<div class="extract-item"><span class="extract-item ei-keyword">${esc(k.word)}</span></div>`).join('')}
+        </div>` : ''}
+        ${dates.length > 0 ? `
+        <div class="extract-group">
+          <div class="extract-group-label">📅 识别到的日期</div>
+          ${dates.map(d => {
+            const hasReminder = emailReminders.some(r => r.date === d);
+            return `<div class="extract-item">
+              <span class="ei-date">${esc(d)}</span>
+              <span class="ei-label">${hasReminder ? '已添加到日历' : '点击设置提醒'}</span>
+              ${hasReminder
+                ? `<span class="ei-action done">✓ 已添加</span>`
+                : `<span class="ei-action" onclick="showReminderModal('${email.id}', '${esc(d)}', '${esc(email.subject)}')">+ 添加提醒</span>`
+              }
+            </div>`;
+          }).join('')}
+        </div>` : ''}
+        ${matchKw.length === 0 && dates.length === 0 ? '<div style="font-size:12px;color:var(--text-tertiary);text-align:center;padding:8px 0;">未提取到关键信息</div>' : ''}
+      </div>
+    </div>
+    ${renderMiniCalendar()}
+  `;
+}
 
-    function render({ animateLast } = {}) {
-      const items = load().map((item, i) => ({ ...item, _storageIndex: i }));
-      updateStats(items.length);
-      pile.innerHTML = "";
+function renderMiniCalendar() {
+  const year = calendaryYear;
+  const month = calendaryMonth;
+  const today = new Date();
+  const firstDay = new Date(year, month, 1);
+  const lastDay = new Date(year, month + 1, 0);
+  const startDay = firstDay.getDay();
+  const monthNames = ['一月','二月','三月','四月','五月','六月','七月','八月','九月','十月','十一月','十二月'];
 
-      /* 倒序：最新的在视觉上更靠前（更大 displayIndex 用更靠上的槽） */
-      const reversed = [...items].reverse();
-      reversed.forEach((item, revIdx) => {
-        const displayIndex = revIdx;
-        const isNewest = animateLast && revIdx === 0;
-        pile.appendChild(createBallEl(item, displayIndex, { animate: isNewest }));
-      });
-    }
+  // Collect dates with reminders for this month
+  const reminderDates = new Set();
+  reminders.forEach(r => {
+    const d = new Date(r.date);
+    if (d.getFullYear() === year && d.getMonth() === month) reminderDates.add(d.getDate());
+  });
 
-    function flyPaper(fromRect, toRect, onDone) {
-      const fly = document.createElement("div");
-      fly.className = "fly-ball";
-      document.body.appendChild(fly);
+  let days = '';
+  for (let i = 0; i < startDay; i++) days += `<div class="cal-day other-month"></div>`;
+  for (let d = 1; d <= lastDay.getDate(); d++) {
+    const isToday = d === today.getDate() && month === today.getMonth() && year === today.getFullYear();
+    const hasEvent = reminderDates.has(d);
+    days += `<div class="cal-day${isToday ? ' today' : ''}${hasEvent ? ' has-event' : ''}">${d}</div>`;
+  }
+  const remaining = (7 - (days.split('<div').length - 1) % 7) % 7;
+  for (let i = 0; i < remaining; i++) days += `<div class="cal-day other-month"></div>`;
 
-      const startX = fromRect.left + fromRect.width / 2 - 20;
-      const startY = fromRect.top + fromRect.height / 2 - 19;
-      const endX = toRect.left + toRect.width / 2 - 20;
-      const endY = toRect.top + 40;
+  return `
+  <div id="calendar-panel">
+    <div class="cal-header">
+      <button onclick="changeMonth(-1)">◂</button>
+      <span class="cal-title">${year}年 ${monthNames[month]}</span>
+      <button onclick="changeMonth(1)">▸</button>
+    </div>
+    <div class="cal-grid">
+      <div class="cal-weekday">日</div><div class="cal-weekday">一</div><div class="cal-weekday">二</div><div class="cal-weekday">三</div><div class="cal-weekday">四</div><div class="cal-weekday">五</div><div class="cal-weekday">六</div>
+      ${days}
+    </div>
+    ${reminders.length > 0 ? `
+    <div style="margin-top:10px;border-top:1px solid var(--border);padding-top:8px;">
+      <div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:var(--text-tertiary);margin-bottom:4px;">待办提醒</div>
+      ${reminders.slice(0, 4).map(r => {
+        const email = emails.find(e => e.id === r.emailId);
+        return `<div style="display:flex;align-items:center;gap:6px;padding:4px 6px;font-size:12px;border-radius:4px;transition:all.12s;cursor:pointer;" onmouseover="this.style.background='var(--bg-hover)'" onmouseout="this.style.background='transparent'" onclick="selectEmail('${r.emailId}')">
+          <span style="color:var(--blue);font-size:10px;">●</span>
+          <span style="color:var(--text-secondary);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(r.title)}</span>
+          <span style="color:var(--text-tertiary);font-size:11px;">${r.date.slice(5)}</span>
+        </div>`;
+      }).join('')}
+    </div>` : ''}
+  </div>`;
+}
 
-      fly.style.left = `${startX}px`;
-      fly.style.top = `${startY}px`;
-      fly.style.setProperty("--fly-x", `${endX - startX}px`);
-      fly.style.setProperty("--fly-y", `${endY - startY}px`);
+// ═══════════════════════════════════════════
+// Date extraction (regex-based)
+// ═══════════════════════════════════════════
+function extractDates(text) {
+  const dates = new Set();
+  // ISO dates: 2026-06-15
+  const isoRe = /\b(\d{4})-(\d{1,2})-(\d{1,2})\b/g;
+  let m;
+  while ((m = isoRe.exec(text)) !== null) dates.add(`${m[1]}-${m[2].padStart(2,'0')}-${m[3].padStart(2,'0')}`);
+  // Chinese dates: 2026年6月15日, 6月15日
+  const cnRe = /(\d{4})年(\d{1,2})月(\d{1,2})日/g;
+  while ((m = cnRe.exec(text)) !== null) dates.add(`${m[1]}-${m[2].padStart(2,'0')}-${m[3].padStart(2,'0')}`);
+  const cnRe2 = /(\d{1,2})月(\d{1,2})日/g;
+  while ((m = cnRe2.exec(text)) !== null) {
+    const year = new Date().getFullYear();
+    dates.add(`${year}-${m[1].padStart(2,'0')}-${m[2].padStart(2,'0')}`);
+  }
+  // English dates: June 15, 2026, June 15 2026, Jun 15, 2026
+  const enRe = /\b(January|February|March|April|May|June|July|August|September|October|November|December|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{1,2})\,?\s*\,?\s*(\d{4})?\b/gi;
+  while ((m = enRe.exec(text)) !== null) {
+    const monthMap = {'january':1,'february':2,'march':3,'april':4,'may':5,'june':6,'july':7,'august':8,'september':9,'october':10,'november':12,'december':12,'jan':1,'feb':2,'mar':3,'apr':4,'may':5,'jun':6,'jul':7,'aug':8,'sep':9,'oct':10,'nov':11,'dec':12};
+    let month = monthMap[m[1].toLowerCase()] || 1;
+    let day = parseInt(m[2]);
+    let year = m[3] ? parseInt(m[3]) : (month >= new Date().getMonth() + 1 ? new Date().getFullYear() : new Date().getFullYear() + 1);
+    dates.add(`${year}-${String(month).padStart(2,'0')}-${String(day).padStart(2,'0')}`);
+  }
+  // "due on" pattern
+  const dueRe = /(?:due|deadline|截止)\s*(?:\s*(?:on|by|为|日期|日))?\s*[：:]?\s*(January|February|March|April|May|June|July|August|September|October|November|December|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{1,2})\,?\s*\,?\s*(\d{4})/gi;
+  while ((m = dueRe.exec(text)) !== null) {
+    const monthMap = {'january':1,'february':2,'march':3,'april':4,'may':5,'june':6,'july':7,'august':8,'september':9,'october':10,'november':12,'december':12,'jan':1,'feb':2,'mar':3,'apr':4,'may':5,'jun':6,'jul':7,'aug':8,'sep':9,'oct':10,'nov':11,'dec':12};
+    let month = monthMap[m[1].toLowerCase()] || 1;
+    let day = parseInt(m[2]);
+    let year = m[3] ? parseInt(m[3]) : (month >= new Date().getMonth() + 1 ? new Date().getFullYear() : new Date().getFullYear() + 1);
+    dates.add(`${year}-${String(month).padStart(2,'0')}-${String(day).padStart(2,'0')}`);
+  }
+  return Array.from(dates).sort();
+}
 
-      requestAnimationFrame(() => {
-        fly.classList.add("active");
-      });
+function escapeRegex(s) {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
 
-      fly.addEventListener("animationend", () => {
-        fly.remove();
-        onDone();
-      }, { once: true });
-    }
+// ═══════════════════════════════════════════
+// Filtering & Search
+// ═══════════════════════════════════════════
+function getFilteredEmails() {
+  let list = [...emails];
+  const searchTerm = (document.getElementById('search-input')?.value || '').toLowerCase();
 
-    function addRecord() {
-      const text = entry.value.trim();
-      if (!text) return;
-
-      saveBtn.disabled = true;
-      const items = load();
-      items.push({ text, ts: Date.now() });
-      save(items);
-
-      const inputRect = entry.getBoundingClientRect();
-      const pileRect = pile.getBoundingClientRect();
-
-      entry.value = "";
-      entry.blur();
-
-      const prefersReduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-
-      if (prefersReduced) {
-        render({ animateLast: true });
-        saveBtn.disabled = false;
-        entry.focus();
-        return;
-      }
-
-      flyPaper(inputRect, pileRect, () => {
-        render({ animateLast: true });
-        saveBtn.disabled = false;
-        entry.focus();
-      });
-    }
-
-    saveBtn.addEventListener("click", addRecord);
-
-    entry.addEventListener("keydown", (e) => {
-      if (e.key === "Enter" && !e.shiftKey) {
-        e.preventDefault();
-        addRecord();
-      }
+  if (currentFilter === 'today') {
+    const today = new Date();
+    list = list.filter(e => {
+      const d = new Date(e.date);
+      return d.toDateString() === today.toDateString();
     });
+  } else if (currentFilter === 'flagged') {
+    const remindedIds = new Set(reminders.map(r => r.emailId));
+    list = list.filter(e => remindedIds.has(e.id));
+  } else if (currentFilter !== 'all') {
+    list = list.filter(e => {
+      const kw = currentFilter.toLowerCase();
+      return e.body.toLowerCase().includes(kw) || e.subject.toLowerCase().includes(kw);
+    });
+  }
 
-    entry.focus();
-    render();
-  </script>
+  if (searchTerm) {
+    list = list.filter(e => {
+      const subj = e.subject.toLowerCase();
+      const body = e.body.toLowerCase();
+      const from = e.from.toLowerCase();
+      return subj.includes(searchTerm) || body.includes(searchTerm) || from.includes(searchTerm);
+    });
+  }
+
+  list.sort((a, b) => new Date(b.date) - new Date(a.date));
+  return list;
+}
+
+function onSearch() { renderEmailList(); }
+
+function setFilter(filter) {
+  currentFilter = filter;
+  document.querySelectorAll('[data-filter]').forEach(el => {
+    el.classList.toggle('active', el.dataset.filter === filter);
+  });
+  // Update keyword active state
+  document.querySelectorAll('.keyword-tag').forEach(el => {
+    el.classList.remove('active');
+  });
+  renderEmailList();
+  renderDetail();
+}
+
+function toggleKeyword(word) {
+  if (currentFilter === word) {
+    currentFilter = 'all';
+  } else {
+    currentFilter = word;
+  }
+  renderKeywords();
+  renderEmailList();
+  renderDetail();
+}
+
+// ═══════════════════════════════════════════
+// Actions
+// ═══════════════════════════════════════════
+function selectAccount(id) {
+  document.querySelectorAll('.account-item').forEach(el => el.classList.remove('active'));
+  const el = document.querySelector(`.account-item:has(button[onclick*="'${id}'"])`);
+  if (el) el.classList.add('active');
+}
+
+function removeAccount(id) {
+  accounts = accounts.filter(a => a.id !== id);
+  saveState();
+  renderAccounts();
+}
+
+function selectEmail(id) {
+  activeEmailId = id;
+  renderEmailList();
+  renderDetail();
+  // Mobile: show detail panel
+  if (window.innerWidth <= 900) {
+    document.getElementById('detail').classList.add('open');
+  }
+}
+
+function addAccount() {
+  const email = document.getElementById('new-account-email').value.trim();
+  const name = document.getElementById('new-account-name').value.trim() || email.split('@')[0];
+  if (!email || !email.includes('@')) { alert('请输入有效的邮箱地址'); return; }
+  if (accounts.some(a => a.email === email)) { alert('该邮箱已绑定'); return; }
+  accounts.push({ id: 'a' + Date.now(), email, name, color: selectedColor });
+  saveState();
+  renderAccounts();
+  closeModal('account-modal');
+  document.getElementById('new-account-email').value = '';
+  document.getElementById('new-account-name').value = '';
+}
+
+function showAccountModal() { document.getElementById('account-modal').classList.add('open'); }
+
+function selectColor(el) {
+  document.querySelectorAll('.color-opt').forEach(c => c.style.borderColor = 'transparent');
+  el.style.borderColor = 'var(--text)';
+  selectedColor = el.dataset.color;
+}
+
+function showKeywordModal() { document.getElementById('keyword-modal').classList.add('open'); document.getElementById('new-keyword').focus(); }
+
+function addKeyword() {
+  const word = document.getElementById('new-keyword').value.trim();
+  if (!word) return;
+  if (keywords.some(k => k.word === word)) { alert('该关键词已存在'); return; }
+  keywords.push({ id: 'k' + Date.now(), word });
+  saveState();
+  renderKeywords();
+  renderEmailList();
+  renderDetail();
+  closeModal('keyword-modal');
+  document.getElementById('new-keyword').value = '';
+}
+
+function removeKeyword(id) {
+  keywords = keywords.filter(k => k.id !== id);
+  if (currentFilter === keywords.find(k => k.id === id)?.word) currentFilter = 'all';
+  saveState();
+  renderKeywords();
+  renderEmailList();
+  renderDetail();
+}
+
+function showReminderModal(emailId, dateStr, subject) {
+  document.getElementById('reminder-modal').classList.add('open');
+  document.getElementById('reminder-title').value = subject.length > 40 ? subject.slice(0, 40) + '…' : subject;
+  document.getElementById('reminder-date').value = dateStr;
+  document.getElementById('reminder-note').value = '';
+  document.getElementById('reminder-modal').dataset.emailId = emailId;
+  document.getElementById('reminder-modal').dataset.date = dateStr;
+}
+
+function saveReminder() {
+  const emailId = document.getElementById('reminder-modal').dataset.emailId;
+  const date = document.getElementById('reminder-date').value;
+  const title = document.getElementById('reminder-title').value.trim();
+  const note = document.getElementById('reminder-note').value.trim();
+  if (!title || !date) { alert('请填写标题和日期'); return; }
+  if (reminders.some(r => r.emailId === emailId && r.date === date)) { alert('该日期已设置提醒'); return; }
+  reminders.push({ id: 'r' + Date.now(), emailId, date, title, note, createdAt: new Date().toISOString() });
+  saveState();
+  closeModal('reminder-modal');
+  renderDetail();
+  renderEmailList();
+}
+
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+
+function toggleExtract() {
+  const body = document.getElementById('extract-body');
+  const arrow = document.getElementById('extract-arrow');
+  if (body.style.display === 'none') {
+    body.style.display = 'flex';
+    arrow.textContent = '▾';
+  } else {
+    body.style.display = 'none';
+    arrow.textContent = '▸';
+  }
+}
+
+function changeMonth(delta) {
+  calendaryMonth += delta;
+  if (calendaryMonth < 0) { calendaryMonth = 11; calendaryYear--; }
+  if (calendaryMonth > 11) { calendaryMonth = 0; calendaryYear++; }
+  renderDetail();
+}
+
+// ═══════════════════════════════════════════
+// Compose Email
+// ═══════════════════════════════════════════
+function showComposeModal() {
+  document.getElementById('compose-modal').classList.add('open');
+  document.getElementById('compose-to').value = '';
+  document.getElementById('compose-subject').value = '';
+  document.getElementById('compose-body').value = '';
+  document.getElementById('compose-extract').style.display = 'none';
+  document.getElementById('compose-extract-keywords').innerHTML = '';
+  document.getElementById('compose-extract-dates').innerHTML = '';
+  setTimeout(() => document.getElementById('compose-to').focus(), 100);
+}
+
+function onComposeInput() {
+  const body = document.getElementById('compose-body').value;
+  const subject = document.getElementById('compose-subject').value;
+  const text = body + ' ' + subject;
+  if (!text.trim()) {
+    document.getElementById('compose-extract').style.display = 'none';
+    return;
+  }
+  const dates = extractDates(text);
+  const matchKw = keywords.filter(k => text.toLowerCase().includes(k.word.toLowerCase()));
+  const kwEl = document.getElementById('compose-extract-keywords');
+  const dtEl = document.getElementById('compose-extract-dates');
+  kwEl.innerHTML = matchKw.map(k => `<span style="background:var(--accent-dim);padding:2px 6px;border-radius:3px;">${esc(k.word)}</span>`).join('');
+  dtEl.innerHTML = dates.map(d => `<span style="background:rgba(245,158,95,0.1);padding:2px 6px;border-radius:3px;">${esc(d)}</span>`).join('');
+  const extractEl = document.getElementById('compose-extract');
+  if (matchKw.length > 0 || dates.length > 0) {
+    extractEl.style.display = 'flex';
+  } else {
+    extractEl.style.display = 'none';
+  }
+}
+
+function sendCompose() {
+  const to = document.getElementById('compose-to').value.trim();
+  const subject = document.getElementById('compose-subject').value.trim();
+  const body = document.getElementById('compose-body').value.trim();
+  if (!to || !to.includes('@')) { alert('请输入有效的收件人地址'); return; }
+  if (!subject) { alert('请输入邮件主题'); return; }
+  if (!body) { alert('请输入邮件正文'); return; }
+  const acctId = accounts.length > 0 ? accounts[0].id : 'a1';
+  const newEmail = {
+    id: 'e' + Date.now(),
+    accountId: acctId,
+    from: accounts.length > 0 ? accounts[0].email : 'me@youni.app',
+    to: to,
+    subject: subject,
+    body: body,
+    date: new Date().toISOString(),
+    read: false
+  };
+  emails.unshift(newEmail);
+  activeEmailId = newEmail.id;
+  saveState();
+  closeModal('compose-modal');
+  renderEmailList();
+  renderDetail();
+}
+
+// ═══════════════════════════════════════════
+// Utilities
+// ═══════════════════════════════════════════
+function esc(s) {
+  const div = document.createElement('div');
+  div.textContent = s;
+  return div.innerHTML;
+}
+
+function formatDate(iso, full) {
+  const d = new Date(iso);
+  const now = new Date();
+  const diff = (now - d) / (1000 * 60 * 60 * 24);
+  if (diff < 1 && d.getDate() === now.getDate()) {
+    return d.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+  }
+  if (diff < 2) return '昨天';
+  if (diff < 7) return `${Math.floor(diff)}天前`;
+  if (full) return d.toLocaleDateString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+  return d.toLocaleDateString('zh-CN', { month: '2-digit', day: '2-digit' });
+}
+
+// ═══════════════════════════════════════════
+// Init
+// ═══════════════════════════════════════════
+loadState();
+renderAccounts();
+renderKeywords();
+renderEmailList();
+renderDetail();
+
+// Close modals on overlay click
+document.querySelectorAll('.modal-overlay').forEach(el => {
+  el.addEventListener('click', e => { if (e.target === el) el.classList.remove('open'); });
+});
+
+// Keyboard shortcuts
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') {
+    document.querySelectorAll('.modal-overlay.open').forEach(el => el.classList.remove('open'));
+  }
+});
+
+console.log('📬 邮你 loaded');
+</script>
 </body>
 </html>
