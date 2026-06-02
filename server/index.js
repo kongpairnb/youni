@@ -230,19 +230,21 @@ function countChineseChars(s) {
   return c;
 }
 
-// Try bodyParts first, fallback to source parsing
+// Main function: extract email text - priority: source parsing > bodyParts
 function getEmailText(bodyParts, source) {
+  // Priority 1: parse raw email source (handles multipart, base64, charset correctly)
+  const fromSource = extractBodyFromSource(source);
+  if (fromSource.length > 0 && countChineseChars(fromSource) > 0) return fromSource;
+
+  // Priority 2: try bodyParts (may still be raw encoded)
   if (bodyParts && bodyParts instanceof Map) {
-    // Try all available body part keys
     const keys = [];
     bodyParts.forEach((v, k) => keys.push(k));
-    // Prioritize text/plain parts
     const prioritized = ['TEXT', '1', '1.1', '1.2', '2', '2.1', ...keys.filter(k => !['TEXT','1','1.1','1.2','2','2.1'].includes(k))];
     for (const key of prioritized) {
       if (bodyParts.has(key)) {
         const buf = bodyParts.get(key);
         if (buf && buf.length > 0) {
-          // Try multiple encodings and pick the one with most Chinese characters
           const candidates = [];
           for (const cs of ['gbk', 'gb2312', 'utf-8', 'utf8']) {
             try {
@@ -253,17 +255,16 @@ function getEmailText(bodyParts, source) {
             } catch(e) {}
           }
           if (candidates.length > 0) {
-            // Pick the encoding that produces most Chinese characters
             candidates.sort((a, b) => b.cn - a.cn);
-            if (candidates[0].text.length > 0) return candidates[0].text;
+            return candidates[0].text;
           }
-          return buf.toString('utf8').trim();
         }
       }
     }
   }
-  // Fallback to parsing source
-  return extractBodyFromSource(source);
+
+  // Priority 3: raw source as fallback (might still have HTML)
+  return fromSource || extractBodyFromSource(source);
 }
 
 // ========================================
